@@ -1,7 +1,11 @@
 import type { AuthSessionData } from "./auth/auth";
 
 /** All Worker bindings: wrangler.jsonc vars + secrets set with `wrangler secret put`. */
-export interface Env extends CloudflareBindings {
+type SecretKeys = "BETTER_AUTH_SECRET" | "RESEND_API_KEY" | "TURNSTILE_SECRET_KEY" | "GOOGLE_BOOKS_API_KEY" | "PASSWORD_HASH_ITERATIONS";
+
+export interface Env extends Omit<CloudflareBindings, SecretKeys> {
+  /** PBKDF2 iterations for new password hashes (see worker/auth/password.ts). */
+  PASSWORD_HASH_ITERATIONS?: string;
   /** Long random string used by Better Auth to sign cookies/tokens. Secret. */
   BETTER_AUTH_SECRET: string;
   /** Resend API key. Secret. Required when EMAIL_PROVIDER=resend. */

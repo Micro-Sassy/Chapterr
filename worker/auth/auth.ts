@@ -14,7 +14,7 @@ import { isProduction } from "../env";
 import { nowIso } from "../lib/util";
 import { disconnectUser } from "../realtime/publish";
 import { consumeRateLimit, scaleRule } from "../security/rate-limit";
-import { hashPassword, verifyPassword } from "./password";
+import { hashPassword, resolveIterations, verifyPassword } from "./password";
 
 function buildAuth(env: Env) {
   const production = isProduction(env);
@@ -39,7 +39,7 @@ function buildAuth(env: Env) {
       maxPasswordLength: LIMITS.passwordMax,
       revokeSessionsOnPasswordReset: true,
       resetPasswordTokenExpiresIn: 60 * 60,
-      password: { hash: hashPassword, verify: verifyPassword },
+      password: { hash: (pw) => hashPassword(pw, resolveIterations(env.PASSWORD_HASH_ITERATIONS)), verify: verifyPassword },
       sendResetPassword: async ({ user, url }) => {
         await createEmailProvider(env).send(passwordResetEmail(user.email, user.name, url));
       },

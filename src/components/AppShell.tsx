@@ -23,7 +23,6 @@ import { api } from "@/lib/api";
 import { useSession, useSignOut } from "@/lib/auth";
 import { useOnline } from "@/lib/hooks";
 import { Avatar } from "./Avatar";
-import { UpdatePrompt } from "./UpdatePrompt";
 import type { Me } from "@shared/types";
 
 export const NAV = [
@@ -170,7 +169,6 @@ export function AppShell() {
             You are offline. Saved pages stay readable; changes need a connection.
           </div>
         )}
-        <UpdatePrompt />
 
         <main id="main" className="mx-auto w-full max-w-5xl flex-1 px-4 pb-28 pt-6 sm:px-6 md:pb-10">
           <Outlet />

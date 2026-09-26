@@ -1,6 +1,7 @@
 import { createBrowserRouter, Navigate, Outlet, RouterProvider, useLocation } from "react-router";
 import { AppShell } from "./components/AppShell";
 import { Alert, Spinner } from "./components/ui";
+import { UpdatePrompt } from "./components/UpdatePrompt";
 import { useSession } from "./lib/auth";
 import { RealtimeProvider } from "./lib/realtime";
 import { AddBookPage } from "./routes/AddBook";
@@ -98,5 +99,11 @@ export const routes = [
 const router = createBrowserRouter(routes);
 
 export function App() {
-  return <RouterProvider router={router} />;
+  return (
+    <>
+      {/* Registers the service worker on every page (offline shell) and offers updates. */}
+      <UpdatePrompt />
+      <RouterProvider router={router} />
+    </>
+  );
 }
