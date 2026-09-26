@@ -49,7 +49,7 @@
     // "resend" in production. "console" logs emails instead of sending them (development only).
     "EMAIL_PROVIDER": "resend",
     // A sender on a domain you verified in Resend, e.g. "Teel Ridge Book Club <books@example.com>".
-    "EMAIL_FROM": "Teel Ridge Book Club <REPLACE_WITH_VERIFIED_SENDER>",
+    "EMAIL_FROM": "Teel Ridge Book Club <books@mail.teelridge.com>",
     // Turnstile site keys are public by design; the matching secret is a Wrangler secret.
     "TURNSTILE_SITE_KEY": "0x4AAAAAAFEuP9s8UvjnccDG",
     // PBKDF2 iterations for new password hashes (10000–100000). Lower only if
