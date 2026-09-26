@@ -64,7 +64,7 @@ export async function loadActivity(db: D1Database, viewerId: string, limit: numb
     ),
     all<Row>(
       db,
-      `SELECT a.id, a.due_date, a.created_at AS at, ${M}, ${E} FROM club_assignments a JOIN "user" u ON u.id = a.created_by
+      `SELECT a.id, a.created_at AS at, ${M}, ${E} FROM club_assignments a JOIN "user" u ON u.id = a.created_by
        JOIN book_editions e ON e.id = a.edition_id WHERE a.archived_at IS NULL ORDER BY a.created_at DESC LIMIT ?`,
       per,
     ),
@@ -129,7 +129,7 @@ export async function loadActivity(db: D1Database, viewerId: string, limit: numb
       kind: "assignment" as const,
       actor: mapMember(r, "m_"),
       edition: mapEdition(r, "e_"),
-      summary: `set a reading assignment due ${String(r.due_date)} for`,
+      summary: "set a reading assignment for",
       link: "/club",
       createdAt: String(r.at),
     })),

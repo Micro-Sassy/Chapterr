@@ -1,0 +1,4 @@
+# Private book club app. This is an indexing preference only —
+# access to member data is enforced by server-side authentication.
+User-agent: *
+Disallow: /
