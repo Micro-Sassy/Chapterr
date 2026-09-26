@@ -2,7 +2,7 @@
   // Teel Ridge Book Club — Cloudflare Workers configuration.
   // See README.md ("Cloudflare production setup") for where each placeholder comes from.
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "teel-ridge-book-club",
+  "name": "bookclub-teelridge",
   "main": "./worker/index.ts",
   "compatibility_date": "2026-08-15",
   // Better Auth relies on AsyncLocalStorage, which is provided by nodejs_compat.
@@ -25,7 +25,7 @@
     {
       "binding": "DB",
       "database_name": "teel-ridge-book-club",
-      "database_id": "REPLACE_WITH_YOUR_D1_DATABASE_ID",
+      "database_id": "48f8b1b9-d3bc-4cf0-8fa4-6817e5d470f1",
       "migrations_dir": "migrations"
     }
   ],

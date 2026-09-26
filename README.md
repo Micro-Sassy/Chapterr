@@ -120,7 +120,7 @@ You need a free Cloudflare account. Do these steps once, from the project folder
    Copy the printed `database_id` into `wrangler.jsonc` → `d1_databases[0].database_id` (replace `REPLACE_WITH_YOUR_D1_DATABASE_ID`). You can also find it later in the dashboard: **Storage & Databases → D1 → teel-ridge-book-club**.
 3. **Create the tables:** `npm run db:migrate:remote`
 4. **Set the public values** in `wrangler.jsonc` → `vars`:
-   - `PUBLIC_APP_URL` — the exact HTTPS address members will use, no trailing slash (e.g. `https://books.example.com`, or `https://teel-ridge-book-club.<your-subdomain>.workers.dev` if you skip a custom domain).
+   - `PUBLIC_APP_URL` — the exact HTTPS address members will use, no trailing slash (e.g. `https://books.example.com`, or `https://bookclub-teelridge.<your-subdomain>.workers.dev` if you skip a custom domain).
    - `EMAIL_FROM` — e.g. `Teel Ridge Book Club <books@example.com>` on a domain verified in Resend (see below).
    - `TURNSTILE_SITE_KEY` — from the Turnstile widget (see below).
 5. **Set the secrets** (you'll be prompted to paste each value; they never go into git):
@@ -130,7 +130,7 @@ You need a free Cloudflare account. Do these steps once, from the project folder
    npx wrangler secret put TURNSTILE_SECRET_KEY
    npx wrangler secret put GOOGLE_BOOKS_API_KEY   # optional
    ```
-   Secrets can also be managed in the dashboard: **Workers & Pages → teel-ridge-book-club → Settings → Variables and Secrets**.
+   Secrets can also be managed in the dashboard: **Workers & Pages → bookclub-teelridge → Settings → Variables and Secrets**.
 6. **Deploy:** `npm run deploy`
 
 The Durable Object (`ClubRealtime`) is created automatically on first deploy from the `durable_objects` and `migrations` blocks in `wrangler.jsonc` — there is no ID to copy. It uses the SQLite storage backend, which is available on the Workers Free plan. A daily Cron Trigger (`triggers.crons`) cleans up expired sessions and old rate-limit counters.
@@ -144,7 +144,7 @@ Keep the GitHub repository **private**. Two options — use one, not both.
 ### Option A (recommended): Cloudflare Workers Builds
 
 1. Complete the one-time setup above (database, secrets, first deploy).
-2. Dashboard → **Workers & Pages → teel-ridge-book-club → Settings → Builds → Connect** and pick this repository and the `main` branch.
+2. Dashboard → **Workers & Pages → bookclub-teelridge → Settings → Builds → Connect** and pick this repository and the `main` branch.
 3. Build settings:
    - **Build command:** `npm run build`
    - **Deploy command:** `npm run db:migrate:remote && npx wrangler deploy`
