@@ -1,0 +1,59 @@
+{
+  // Teel Ridge Book Club — Cloudflare Workers configuration.
+  // See README.md ("Cloudflare production setup") for where each placeholder comes from.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "teel-ridge-book-club",
+  "main": "./worker/index.ts",
+  "compatibility_date": "2026-08-15",
+  // Better Auth relies on AsyncLocalStorage, which is provided by nodejs_compat.
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+
+  // Static SPA assets (built by Vite). /api/* always runs the Worker first so
+  // private data is never served by the asset layer.
+  "assets": {
+    "directory": "./dist/client",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+
+  // D1 database. Replace database_id with the ID printed by
+  //   npx wrangler d1 create teel-ridge-book-club
+  // (also shown in Cloudflare dashboard → Storage & Databases → D1).
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "teel-ridge-book-club",
+      "database_id": "REPLACE_WITH_YOUR_D1_DATABASE_ID",
+      "migrations_dir": "migrations"
+    }
+  ],
+
+  // Realtime chat fan-out. The class is exported from worker/index.ts.
+  // SQLite-backed Durable Objects are available on the Workers Free plan.
+  "durable_objects": {
+    "bindings": [{ "name": "REALTIME", "class_name": "ClubRealtime" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["ClubRealtime"] }],
+
+  // Non-secret configuration. Secrets (BETTER_AUTH_SECRET, RESEND_API_KEY,
+  // TURNSTILE_SECRET_KEY, GOOGLE_BOOKS_API_KEY) are set with
+  //   npx wrangler secret put NAME
+  // and must never be committed.
+  "vars": {
+    "APP_ENV": "production",
+    "APP_NAME": "Teel Ridge Book Club",
+    // Your public HTTPS origin, e.g. https://books.example.com (no trailing slash).
+    "PUBLIC_APP_URL": "https://REPLACE_WITH_YOUR_DOMAIN",
+    // "resend" in production. "console" logs emails instead of sending them (development only).
+    "EMAIL_PROVIDER": "resend",
+    // A sender on a domain you verified in Resend, e.g. "Teel Ridge Book Club <books@example.com>".
+    "EMAIL_FROM": "Teel Ridge Book Club <REPLACE_WITH_VERIFIED_SENDER>",
+    // Turnstile site keys are public by design; the matching secret is a Wrangler secret.
+    "TURNSTILE_SITE_KEY": "REPLACE_WITH_TURNSTILE_SITE_KEY"
+  }
+
+  // Custom domain (optional, recommended). Uncomment after the zone is on Cloudflare:
+  // "routes": [{ "pattern": "books.example.com", "custom_domain": true }]
+}

@@ -1,0 +1,35 @@
+# dependencies
+node_modules/
+
+# build output
+dist/
+dist-ssr/
+*.tsbuildinfo
+dev-dist/
+
+# Cloudflare / Wrangler local state and secrets
+.wrangler/
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+worker/worker-configuration.d.ts.bak
+
+# environment files
+.env
+.env.*
+!.env.example
+
+# test output
+coverage/
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+
+# editors / OS
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.log
+npm-debug.log*

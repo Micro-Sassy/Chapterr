@@ -1,0 +1,14 @@
+# Copy to .dev.vars for local development:  cp .dev.vars.example .dev.vars
+# .dev.vars is git-ignored. Never commit real secrets. Fill in values locally.
+#
+# Local values override the "vars" block in wrangler.jsonc while running `npm run dev`.
+
+APP_ENV=
+PUBLIC_APP_URL=
+BETTER_AUTH_SECRET=
+EMAIL_PROVIDER=
+EMAIL_FROM=
+RESEND_API_KEY=
+TURNSTILE_SITE_KEY=
+TURNSTILE_SECRET_KEY=
+GOOGLE_BOOKS_API_KEY=
