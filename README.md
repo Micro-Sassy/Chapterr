@@ -1,5 +1,7 @@
 # Teel Ridge Book Club
 
+**Live at https://bookclub.teelridge.com** (emails are sent from `books@mail.teelridge.com`).
+
 A private, installable web app (PWA) for one book club. Members keep personal reading libraries, share a club reading list and goals, plan meetings and assignments, write reviews, save quotations, recommend books, import their Goodreads history, share selected items publicly, and chat in real time.
 
 It is not a commercial product: there are no subscriptions, billing, organizations, invitations, admin roles or approval workflows. Everything runs on free tiers: **Cloudflare Workers + D1 + Durable Objects + Turnstile**, **Resend** for email, and **Open Library** (optionally **Google Books**) for book data.

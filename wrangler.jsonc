@@ -45,7 +45,7 @@
     "APP_ENV": "production",
     "APP_NAME": "Teel Ridge Book Club",
     // Your public HTTPS origin, e.g. https://books.example.com (no trailing slash).
-    "PUBLIC_APP_URL": "https://bookclub-teelridge.tyler-cc9.workers.dev",
+    "PUBLIC_APP_URL": "https://bookclub.teelridge.com",
     // "resend" in production. "console" logs emails instead of sending them (development only).
     "EMAIL_PROVIDER": "resend",
     // A sender on a domain you verified in Resend, e.g. "Teel Ridge Book Club <books@example.com>".
@@ -59,8 +59,10 @@
 
   // Daily housekeeping (expired sessions, rate-limit counters, old notifications).
   // Cron Triggers are included in the Workers Free plan.
-  "triggers": { "crons": ["17 4 * * *"] }
+  "triggers": { "crons": ["17 4 * * *"] },
 
-  // Custom domain (optional, recommended). Uncomment after the zone is on Cloudflare:
-  // "routes": [{ "pattern": "books.example.com", "custom_domain": true }]
+  // The club's address (a Workers Custom Domain; Cloudflare manages its DNS record and certificate).
+  "routes": [{ "pattern": "bookclub.teelridge.com", "custom_domain": true }],
+  // Members use only the custom domain (sign-in is bound to PUBLIC_APP_URL).
+  "workers_dev": false
 }
