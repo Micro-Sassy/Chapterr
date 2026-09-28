@@ -13,14 +13,16 @@
   // cross-country round trip per query.
   "placement": { "mode": "smart" },
 
-  // Static SPA assets (built by Vite). Every request runs the Worker first so
-  // it can force HTTPS and add security headers; private data (/api/*) is
-  // never served by the asset layer.
+  // Static SPA assets (built by Vite). Pages and the API run the Worker first
+  // so it can force HTTPS and add security headers (private data under /api/*
+  // is never served by the asset layer). Fingerprinted files, images and icons
+  // skip the Worker and are served from the nearest edge; HSTS and the CSP's
+  // upgrade-insecure-requests already keep them on https.
   "assets": {
     "directory": "./dist/client",
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
-    "run_worker_first": true
+    "run_worker_first": ["/*", "!/assets/*", "!/brand/*", "!/icons/*", "!/favicon.png", "!/workbox-*"]
   },
 
   // D1 database. Replace database_id with the ID printed by
