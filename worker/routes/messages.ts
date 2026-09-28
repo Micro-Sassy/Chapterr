@@ -58,30 +58,22 @@ async function loadMessage(db: D1Database, id: string): Promise<(Message & { sen
   return r ? { ...mapMessage(r), senderId: String(r.m_id) } : null;
 }
 
-async function unreadCount(db: D1Database, conversationId: string, userId: string): Promise<number> {
-  const row = await first<{ n: number }>(
-    db,
-    `SELECT COUNT(*) AS n FROM messages m
-     LEFT JOIN conversation_participants cp ON cp.conversation_id = m.conversation_id AND cp.user_id = ?
-     WHERE m.conversation_id = ? AND m.sender_id <> ? AND m.deleted_at IS NULL
-       AND (cp.last_read_at IS NULL OR m.created_at > cp.last_read_at)`,
-    userId,
-    conversationId,
-    userId,
-  );
-  return Number(row?.n ?? 0);
-}
+/**
+ * Unread = messages from others, not removed, newer than the member's last read
+ * time. For the club conversation a member who has never opened it only counts
+ * messages sent since they joined the app.
+ */
+const UNREAD_SINCE = `COALESCE(me.last_read_at, CASE WHEN c.kind = 'club' THEN (SELECT "createdAt" FROM "user" WHERE id = ?) ELSE '' END)`;
 
 export async function totalUnread(env: Env, userId: string): Promise<number> {
   const row = await first<{ n: number }>(
     env.DB,
     `SELECT COUNT(*) AS n FROM messages m
      JOIN conversations c ON c.id = m.conversation_id
-     LEFT JOIN conversation_participants cp ON cp.conversation_id = m.conversation_id AND cp.user_id = ?
+     LEFT JOIN conversation_participants me ON me.conversation_id = c.id AND me.user_id = ?
      WHERE m.sender_id <> ? AND m.deleted_at IS NULL
-       AND (c.kind = 'club' OR cp.user_id IS NOT NULL)
-       AND (cp.last_read_at IS NULL OR m.created_at > cp.last_read_at)
-       AND (c.kind = 'direct' OR m.created_at > (SELECT "createdAt" FROM "user" WHERE id = ?))`,
+       AND (c.kind = 'club' OR me.user_id IS NOT NULL)
+       AND m.created_at > ${UNREAD_SINCE}`,
     userId,
     userId,
     userId,
@@ -96,6 +88,8 @@ conversationRoutes.get("/", async (c) => {
     `SELECT c.id, c.kind, c.last_message_at,
        (SELECT CASE WHEN m.deleted_at IS NOT NULL THEN NULL ELSE substr(m.body, 1, 140) END FROM messages m
           WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1) AS preview,
+       (SELECT COUNT(*) FROM messages m WHERE m.conversation_id = c.id AND m.sender_id <> ? AND m.deleted_at IS NULL
+          AND m.created_at > ${UNREAD_SINCE}) AS unread,
        ${memberCols("o", "o_")}
      FROM conversations c
      LEFT JOIN conversation_participants me ON me.conversation_id = c.id AND me.user_id = ?
@@ -105,20 +99,21 @@ conversationRoutes.get("/", async (c) => {
      ORDER BY c.kind = 'club' DESC, COALESCE(c.last_message_at, c.created_at) DESC`,
     user.id,
     user.id,
+    user.id,
+    user.id,
   );
-  const conversations: Conversation[] = [];
-  for (const r of rows) {
+  const conversations: Conversation[] = rows.map((r) => {
     const other = r.kind === "direct" ? mapMemberOrNull(r, "o_") : null;
-    conversations.push({
+    return {
       id: String(r.id),
       kind: r.kind as Conversation["kind"],
       title: r.kind === "club" ? "Club conversation" : (other?.displayName ?? "Former member"),
       otherMember: other,
       lastMessageAt: (r.last_message_at as string | null) ?? null,
       lastMessagePreview: (r.preview as string | null) ?? null,
-      unreadCount: await unreadCount(c.env.DB, String(r.id), user.id),
-    });
-  }
+      unreadCount: Number(r.unread ?? 0),
+    };
+  });
   return c.json(conversations);
 });
 

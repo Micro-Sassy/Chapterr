@@ -5,7 +5,19 @@ import type { EmailProvider } from "./types";
 
 export type { EmailMessage, EmailProvider } from "./types";
 
+/** Templates reference brand images relative to the app; this fills in the app's origin. */
+export const APP_ORIGIN_TOKEN = "%%APP_ORIGIN%%";
+
 export function createEmailProvider(env: Env): EmailProvider {
+  const inner = selectProvider(env);
+  const origin = env.PUBLIC_APP_URL.replace(/\/+$/, "");
+  return {
+    name: inner.name,
+    send: (message) => inner.send({ ...message, html: message.html.replaceAll(APP_ORIGIN_TOKEN, origin) }),
+  };
+}
+
+function selectProvider(env: Env): EmailProvider {
   const provider = (env.EMAIL_PROVIDER || "resend").toLowerCase();
   if (provider === "console") {
     if (isProduction(env)) {

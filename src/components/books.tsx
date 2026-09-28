@@ -170,7 +170,26 @@ export function BookPicker({ onPick, pickLabel = "Choose" }: { onPick: (edition:
     staleTime: 5 * 60 * 1000,
   });
   const add = useMutation({
-    mutationFn: (hit: CatalogResult) => api<EditionDetail>("/api/books/editions/provider", { body: { provider: hit.provider, providerId: hit.providerId } }),
+    mutationFn: (hit: CatalogResult) =>
+      api<EditionDetail>("/api/books/editions/provider", {
+        body: {
+          provider: hit.provider,
+          providerId: hit.providerId,
+          // Lets the server save the book instantly; it fills in the rest in the background.
+          hint: {
+            title: hit.title,
+            subtitle: hit.subtitle,
+            authors: hit.authors,
+            isbn13: hit.isbn13,
+            isbn10: hit.isbn10,
+            publisher: hit.publisher,
+            publishedYear: hit.publishedYear,
+            pageCount: hit.pageCount,
+            coverUrl: hit.coverUrl,
+            format: hit.format,
+          },
+        },
+      }),
     onSuccess: (edition) => {
       void qc.invalidateQueries({ queryKey: ["book-search"] });
       onPick(edition);

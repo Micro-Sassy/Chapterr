@@ -8,7 +8,7 @@ import { BookRow } from "@/components/books";
 import { Alert, Card, EmptyState, ProgressBar, SectionTitle, Spinner } from "@/components/ui";
 import { api, errorMessage } from "@/lib/api";
 import { useSession } from "@/lib/auth";
-import { formatDate, formatDateTime, relativeTime } from "@/lib/format";
+import { formatDate, formatDateTime, relativeTime, todayIso } from "@/lib/format";
 import { useDocumentTitle } from "@/lib/hooks";
 
 function GoalCard({ title, done, target, link }: { title: string; done: number; target: number | null; link: string }) {
@@ -43,7 +43,7 @@ function GoalCard({ title, done, target, link }: { title: string; done: number; 
 export function DashboardPage() {
   useDocumentTitle("Home");
   const { data: session } = useSession();
-  const q = useQuery({ queryKey: ["dashboard"], queryFn: () => api<DashboardData>("/api/dashboard") });
+  const q = useQuery({ queryKey: ["dashboard"], queryFn: () => api<DashboardData>(`/api/dashboard?today=${todayIso()}`) });
   if (q.isPending) return <Spinner />;
   if (q.isError) return <Alert tone="error">{errorMessage(q.error)}</Alert>;
   const d = q.data;
@@ -56,7 +56,7 @@ export function DashboardPage() {
       </header>
 
       {d.unreadMessages > 0 && (
-        <Link to="/messages" className="flex items-center gap-2 rounded-xl border border-highlight/40 bg-highlight-soft px-4 py-3 text-sm">
+        <Link to="/messages" className="flex items-center gap-2 rounded-[var(--radius)] border border-highlight/40 bg-highlight-soft px-4 py-3 text-sm">
           <MessageCircle className="size-4 text-highlight" aria-hidden />
           You have {d.unreadMessages} unread message{d.unreadMessages === 1 ? "" : "s"}.
         </Link>

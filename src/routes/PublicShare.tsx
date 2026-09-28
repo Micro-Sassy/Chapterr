@@ -1,10 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
-import { BookMarked, Quote as QuoteIcon } from "lucide-react";
+import { Quote as QuoteIcon } from "lucide-react";
 import { useState } from "react";
 import { useParams } from "react-router";
 import { READING_STATUS_LABELS, SENTIMENT_LABELS } from "@shared/constants";
 import type { PublicEdition, PublicShare } from "@shared/types";
 import { BookCover } from "@/components/BookCover";
+import { Logo } from "@/components/Logo";
 import { Alert, Badge, Button, Spinner } from "@/components/ui";
 import { api, errorMessage } from "@/lib/api";
 import { authorsLine, formatDate } from "@/lib/format";
@@ -118,16 +119,15 @@ export function PublicSharePage() {
   useDocumentTitle(title);
   return (
     <div className="mx-auto flex min-h-dvh max-w-2xl flex-col px-4 py-10">
-      <header className="mb-6 flex items-center gap-2">
-        <BookMarked className="size-6 text-accent" aria-hidden />
-        <span className="font-serif text-lg font-semibold">Teel Ridge Book Club</span>
+      <header className="mb-6 flex justify-center">
+        <Logo variant="horizontal" className="w-64" />
       </header>
-      <main className="flex-1 rounded-2xl border border-line bg-surface p-6">
+      <main className="bookplate flex-1 rounded-[var(--radius)] border border-line bg-surface p-6 shadow-[var(--shadow-book)]">
         {q.isPending && <Spinner />}
         {q.isError && <Alert tone="error">{errorMessage(q.error)}</Alert>}
         {q.data && (
           <>
-            <h1 className="mb-5 text-2xl font-semibold">{title}</h1>
+            <h1 className="mb-5 text-3xl">{title}</h1>
             <Content share={q.data} />
           </>
         )}

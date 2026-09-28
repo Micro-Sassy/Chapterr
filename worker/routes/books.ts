@@ -6,18 +6,19 @@ import {
   editionUpdateSchema,
   manualEditionSchema,
   providerEditionSchema,
+  type CatalogHint,
 } from "../../shared/schemas";
 import type { BookSearchResponse, CatalogResult, EditionSummary } from "../../shared/types";
 import type { AppEnv } from "../env";
 import { all, first, placeholders } from "../lib/db";
-import { getEditionDetail, genresForBook, searchText, upsertEdition } from "../lib/editions";
+import { findExistingEdition, getEditionDetail, genresForBook, searchText, upsertEdition } from "../lib/editions";
 import { ApiError, badRequest, notFound } from "../lib/errors";
 import { parseBody, parseWith } from "../lib/http";
 import { editionCols, mapEdition, type Row } from "../lib/mappers";
 import { escapeLike, nowIso } from "../lib/util";
 import { updateVersioned } from "../lib/versioned";
 import { fetchProviderEdition, searchCatalog } from "../providers/catalog";
-import { ProviderError, type NormalizedEdition } from "../providers/types";
+import { ProviderError, safeCoverUrl, type NormalizedEdition } from "../providers/types";
 import { enforceRateLimit } from "../security/rate-limit";
 
 export const bookRoutes = new Hono<AppEnv>();
@@ -80,10 +81,72 @@ bookRoutes.get("/search", async (c) => {
   return c.json(body);
 });
 
+/** Only accept cover images from the catalogue providers we search. */
+function trustedCover(url: string | null): string | null {
+  const safe = safeCoverUrl(url);
+  if (!safe) return null;
+  const host = new URL(safe).hostname;
+  return host === "covers.openlibrary.org" || host.endsWith(".googleusercontent.com") || host === "books.google.com" ? safe : null;
+}
+
+function hintToNormalized(provider: "google_books" | "open_library", providerId: string, hint: CatalogHint): NormalizedEdition {
+  const cover = trustedCover(hint.coverUrl);
+  return {
+    title: hint.title,
+    subtitle: hint.subtitle,
+    authors: hint.authors.length ? hint.authors : ["Unknown author"],
+    isbn13: hint.isbn13 && normalizeIsbn(hint.isbn13).isbn13 ? hint.isbn13 : null,
+    isbn10: hint.isbn10 && normalizeIsbn(hint.isbn10).isbn10 ? hint.isbn10 : null,
+    publisher: hint.publisher,
+    publishedDate: hint.publishedYear ? String(hint.publishedYear) : null,
+    publishedYear: hint.publishedYear,
+    pageCount: hint.pageCount,
+    format: hint.format,
+    language: null,
+    description: null,
+    coverUrl: cover,
+    coverUrlLarge: cover ? cover.replace(/-M\.jpg$/, "-L.jpg") : null,
+    googleBooksId: provider === "google_books" ? providerId : null,
+    openLibraryId: provider === "open_library" ? providerId : null,
+    openLibraryWorkId: null,
+    goodreadsId: null,
+    source: provider,
+  };
+}
+
+/** Fill in details (description, pages, format, larger cover) from the provider. Never overwrites existing values. */
+async function enrichEdition(env: AppEnv["Bindings"], provider: "google_books" | "open_library", providerId: string, userId: string) {
+  try {
+    const full = await fetchProviderEdition(env, provider, providerId);
+    await upsertEdition(env.DB, full, userId);
+  } catch (err) {
+    console.warn("background enrichment failed", provider, providerId, err instanceof Error ? err.message : err);
+  }
+}
+
 bookRoutes.post("/editions/provider", async (c) => {
   const user = c.get("user");
   const input = await parseBody(c, providerEditionSchema);
   await enforceRateLimit(c.env, "book-add", user.id, { window: 60, max: 30 });
+
+  // Fast path: already in the club catalogue.
+  if (input.provider !== "isbn") {
+    const existing = await findExistingEdition(c.env.DB, {
+      googleBooksId: input.provider === "google_books" ? input.providerId : null,
+      openLibraryId: input.provider === "open_library" ? input.providerId : null,
+      isbn13: input.hint?.isbn13 ?? null,
+    });
+    if (existing) return c.json(await getEditionDetail(c.env.DB, existing));
+
+    // Save straight away from the search result, then enrich in the background
+    // so opening a book never waits on slow catalogue APIs.
+    if (input.hint) {
+      const { id, created } = await upsertEdition(c.env.DB, hintToNormalized(input.provider, input.providerId, input.hint), user.id);
+      c.executionCtx.waitUntil(enrichEdition(c.env, input.provider, input.providerId, user.id));
+      return c.json(await getEditionDetail(c.env.DB, id), created ? 201 : 200);
+    }
+  }
+
   let data: NormalizedEdition;
   try {
     data = await fetchProviderEdition(c.env, input.provider, input.providerId);
@@ -192,6 +255,8 @@ bookRoutes.put("/editions/:id", async (c) => {
       language: n.language,
       description: n.description,
       cover_url: n.coverUrl,
+      // The detail page prefers the large cover, so keep it in step with edits.
+      cover_url_large: n.coverUrl,
       search_text: searchText(n),
     },
     load: () => getEditionDetail(c.env.DB, id).catch(() => null),
@@ -217,7 +282,8 @@ bookRoutes.put("/works/:bookId/genres", async (c) => {
   }
   const now = nowIso();
   await c.env.DB.batch([
-    c.env.DB.prepare("DELETE FROM book_genres WHERE book_id = ?").bind(bookId),
+    // Archived genres are hidden from the picker, so keep their existing tags.
+    c.env.DB.prepare("DELETE FROM book_genres WHERE book_id = ? AND genre_id IN (SELECT id FROM genres WHERE archived_at IS NULL)").bind(bookId),
     ...unique.map((g) =>
       c.env.DB.prepare("INSERT INTO book_genres (book_id, genre_id, created_by, created_at) VALUES (?, ?, ?, ?)").bind(bookId, g, user.id, now),
     ),

@@ -1,5 +1,8 @@
 import type { ApiErrorBody } from "@shared/types";
 
+/** Lets the server word dates in emails in the sender's local time. */
+const TIME_ZONE = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+
 export class ApiRequestError extends Error {
   status: number;
   code: string;
@@ -23,7 +26,7 @@ export interface RequestOptions {
 
 /** JSON request to our own API. Cookies are same-origin and HttpOnly. */
 export async function api<T>(path: string, opts: RequestOptions = {}): Promise<T> {
-  const headers: Record<string, string> = { Accept: "application/json", ...opts.headers };
+  const headers: Record<string, string> = { Accept: "application/json", "X-Time-Zone": TIME_ZONE, ...opts.headers };
   let body: BodyInit | undefined;
   if (opts.body !== undefined) {
     headers["Content-Type"] = "application/json";

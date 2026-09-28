@@ -6,7 +6,7 @@ import { all, first } from "../lib/db";
 import { queryInt } from "../lib/http";
 import { loadUserBooks } from "../lib/loaders";
 import { editionCols, mapEdition, mapMember, memberCols, type Row } from "../lib/mappers";
-import { currentYear, nowIso } from "../lib/util";
+import { currentYear, localToday } from "../lib/util";
 import { loadAssignments, loadClubGoal, loadMeetings } from "./club";
 import { totalUnread } from "./messages";
 import { personalGoal } from "./personal";
@@ -141,7 +141,7 @@ dashboardRoutes.get("/dashboard", async (c) => {
   const user = c.get("user");
   const db = c.env.DB;
   const year = currentYear();
-  const today = nowIso().slice(0, 10);
+  const today = localToday(c.req.query("today"));
   const since = new Date(Date.now() - 6 * 3600 * 1000).toISOString();
   const [personal, clubGoal, clubDone, reading, meetings, assignments, activity, unreadMessages, unreadNotifications] = await Promise.all([
     personalGoal(db, user.id, year),

@@ -62,7 +62,7 @@ function ConversationList({ activeId }: { activeId?: string }) {
   return (
     <div>
       <div className="mb-3 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Messages</h1>
+        <h1 className="text-3xl">Messages</h1>
         <Button size="sm" icon={MessageCirclePlus} onClick={() => setCreating(true)}>
           New
         </Button>
@@ -75,7 +75,7 @@ function ConversationList({ activeId }: { activeId?: string }) {
             <Link
               to={`/messages/${c.id}`}
               aria-current={c.id === activeId ? "page" : undefined}
-              className={cx("flex items-center gap-3 rounded-xl px-3 py-2.5", c.id === activeId ? "bg-accent-soft" : "hover:bg-surface-2")}
+              className={cx("flex items-center gap-3 rounded-[var(--radius)] px-3 py-2.5", c.id === activeId ? "bg-accent-soft" : "hover:bg-surface-2")}
             >
               {c.kind === "club" ? (
                 <span className="inline-flex size-10 items-center justify-center rounded-full bg-accent text-on-accent">
@@ -119,7 +119,7 @@ function MessageBubble({ message, own, onEdit, onDelete }: { message: Message; o
         {!own && <p className="mb-0.5 text-xs font-medium text-ink-muted">{message.sender.displayName}</p>}
         <div
           className={cx(
-            "inline-block rounded-2xl px-3.5 py-2 text-left text-sm",
+            "inline-block rounded-[var(--radius)] px-3.5 py-2 text-left text-sm",
             removed ? "border border-dashed border-line italic text-ink-muted" : own ? "bg-accent text-on-accent" : "bg-surface border border-line",
           )}
         >
@@ -315,7 +315,7 @@ export function MessagesPage() {
       </div>
       <div className={id ? undefined : "hidden md:block"}>
         {id ? (
-          <ConversationView id={id} />
+          <ConversationView key={id} id={id} />
         ) : (
           <EmptyState icon={UsersRound} title="Choose a conversation">
             Chat with the whole club or start a private conversation with one member. Messages are only visible to signed-in members and can never be

@@ -27,7 +27,7 @@ export function MembersPage() {
       <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {list.map((m) => (
           <li key={m.id}>
-            <Link to={`/members/${m.username}`} className="flex items-center gap-3 rounded-2xl border border-line bg-surface p-3 hover:bg-surface-2">
+            <Link to={`/members/${m.username}`} className="flex items-center gap-3 rounded-[var(--radius)] border border-line bg-surface p-3 hover:bg-surface-2">
               <Avatar member={m} size="md" />
               <span className="min-w-0">
                 <span className="block truncate font-medium">{m.displayName}</span>
@@ -77,7 +77,7 @@ export function MemberProfilePage() {
       <Card className="flex flex-col items-center gap-4 text-center sm:flex-row sm:text-left">
         <Avatar member={p} size="lg" />
         <div className="min-w-0 flex-1 space-y-1">
-          <h1 className="text-2xl font-semibold">{p.displayName}</h1>
+          <h1 className="text-3xl">{p.displayName}</h1>
           <p className="text-sm text-ink-muted">
             @{p.username}
             {p.profile.pronouns ? ` · ${p.profile.pronouns}` : ""}
@@ -104,7 +104,7 @@ export function MemberProfilePage() {
           { label: "Quotes", value: p.stats.quotes },
         ].map((s) => (
           <Card key={s.label} className="p-3 text-center">
-            <p className="font-serif text-2xl font-semibold">{s.value}</p>
+            <p className="font-serif text-3xl">{s.value}</p>
             <p className="text-xs text-ink-muted">{s.label}</p>
           </Card>
         ))}
@@ -198,7 +198,7 @@ export function NotificationsPage() {
             <button
               type="button"
               onClick={() => void open(n)}
-              className={cx("flex w-full items-start gap-3 rounded-2xl border border-line p-3 text-left hover:bg-surface-2", n.readAt ? "bg-surface" : "bg-accent-soft")}
+              className={cx("flex w-full items-start gap-3 rounded-[var(--radius)] border border-line p-3 text-left hover:bg-surface-2", n.readAt ? "bg-surface" : "bg-accent-soft")}
             >
               <Avatar member={n.actor} />
               <span className="min-w-0 flex-1">
@@ -223,14 +223,14 @@ export function MorePage() {
       <ul className="grid gap-2 sm:grid-cols-2">
         {NAV.map((item) => (
           <li key={item.to}>
-            <Link to={item.to} className="flex items-center gap-3 rounded-2xl border border-line bg-surface p-4 hover:bg-surface-2">
+            <Link to={item.to} className="flex items-center gap-3 rounded-[var(--radius)] border border-line bg-surface p-4 hover:bg-surface-2">
               <item.icon className="size-5 text-accent" aria-hidden />
               <span className="font-medium">{item.label}</span>
             </Link>
           </li>
         ))}
         <li>
-          <Link to="/club/meetings" className="flex items-center gap-3 rounded-2xl border border-line bg-surface p-4 hover:bg-surface-2">
+          <Link to="/club/meetings" className="flex items-center gap-3 rounded-[var(--radius)] border border-line bg-surface p-4 hover:bg-surface-2">
             <Users className="size-5 text-accent" aria-hidden />
             <span className="font-medium">Meetings</span>
           </Link>

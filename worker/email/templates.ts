@@ -3,36 +3,45 @@ import type { EmailMessage } from "./types";
 
 const BRAND = {
   name: "Teel Ridge Book Club",
-  ink: "#1f2a24",
-  accent: "#2f5d46",
-  paper: "#f7f3ea",
-  muted: "#5b6660",
+  ink: "#2a2319",
+  accent: "#213a2f",
+  paper: "#f1e7d0",
+  card: "#faf5e8",
+  line: "#d6c49f",
+  gold: "#9c7a34",
+  muted: "#6a5c46",
+  // Filled in with PUBLIC_APP_URL by createEmailProvider.
+  logo: "%%APP_ORIGIN%%/brand/logo-horizontal-green.png",
 };
+const SERIF = "'EB Garamond',Garamond,Georgia,'Times New Roman',serif";
 
 function layout(opts: { preheader: string; heading: string; paragraphs: string[]; action?: { label: string; url: string }; footnote: string }) {
   const { preheader, heading, paragraphs, action, footnote } = opts;
   const html = `<!doctype html>
 <html lang="en">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(heading)}</title></head>
-<body style="margin:0;padding:0;background:${BRAND.paper};font-family:Georgia,'Times New Roman',serif;color:${BRAND.ink};">
+<body style="margin:0;padding:0;background:${BRAND.paper};font-family:${SERIF};color:${BRAND.ink};">
 <span style="display:none;max-height:0;overflow:hidden;opacity:0;">${escapeHtml(preheader)}</span>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${BRAND.paper};padding:32px 12px;">
 <tr><td align="center">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border:1px solid #e4ddd0;border-radius:12px;">
-<tr><td style="padding:28px 32px 8px 32px;">
-<div style="font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:${BRAND.accent};font-family:Arial,Helvetica,sans-serif;font-weight:bold;">${BRAND.name}</div>
-<h1 style="font-size:24px;line-height:1.3;margin:16px 0 8px 0;font-weight:normal;">${escapeHtml(heading)}</h1>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:540px;background:${BRAND.card};border:1px solid ${BRAND.line};border-radius:6px;">
+<tr><td align="center" style="padding:28px 32px 4px 32px;">
+<img src="${BRAND.logo}" width="280" height="52" alt="${BRAND.name}" style="display:block;width:280px;max-width:100%;height:auto;border:0;">
+<div style="margin:18px auto 0 auto;width:120px;border-top:1px solid ${BRAND.gold};line-height:0;font-size:0;">&nbsp;</div>
 </td></tr>
-<tr><td style="padding:0 32px;font-size:16px;line-height:1.6;font-family:Arial,Helvetica,sans-serif;color:${BRAND.ink};">
+<tr><td style="padding:8px 32px 0 32px;">
+<h1 style="font-family:${SERIF};font-size:26px;line-height:1.3;margin:16px 0 8px 0;font-weight:normal;color:${BRAND.accent};text-align:center;">${escapeHtml(heading)}</h1>
+</td></tr>
+<tr><td style="padding:0 32px;font-size:17px;line-height:1.6;font-family:${SERIF};color:${BRAND.ink};">
 ${paragraphs.map((p) => `<p style="margin:12px 0;">${escapeHtml(p)}</p>`).join("\n")}
 ${
   action
-    ? `<p style="margin:24px 0;"><a href="${escapeHtml(action.url)}" style="display:inline-block;background:${BRAND.accent};color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:bold;">${escapeHtml(action.label)}</a></p>
-<p style="margin:12px 0;font-size:13px;color:${BRAND.muted};">If the button does not work, copy this link into your browser:<br><span style="word-break:break-all;">${escapeHtml(action.url)}</span></p>`
+    ? `<p style="margin:26px 0;text-align:center;"><a href="${escapeHtml(action.url)}" style="display:inline-block;background:${BRAND.accent};color:#f6eedb;text-decoration:none;padding:12px 26px;border-radius:4px;font-family:${SERIF};font-size:17px;letter-spacing:.04em;">${escapeHtml(action.label)}</a></p>
+<p style="margin:12px 0;font-size:14px;color:${BRAND.muted};">If the button does not work, copy this link into your browser:<br><span style="word-break:break-all;">${escapeHtml(action.url)}</span></p>`
     : ""
 }
 </td></tr>
-<tr><td style="padding:16px 32px 28px 32px;font-size:12px;line-height:1.5;color:${BRAND.muted};font-family:Arial,Helvetica,sans-serif;border-top:1px solid #efe9dd;">
+<tr><td style="padding:16px 32px 28px 32px;font-size:13px;line-height:1.5;color:${BRAND.muted};font-family:${SERIF};font-style:italic;border-top:1px solid ${BRAND.line};">
 ${escapeHtml(footnote)}
 </td></tr>
 </table>

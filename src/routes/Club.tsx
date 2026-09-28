@@ -10,7 +10,7 @@ import { Alert, Badge, Button, Card, Checkbox, EmptyState, Field, IconButton, In
 import { Dialog } from "@/components/ui/Dialog";
 import { useToast } from "@/components/ui/Toast";
 import { api, ApiRequestError, errorMessage } from "@/lib/api";
-import { formatDate, relativeTime } from "@/lib/format";
+import { formatDate, relativeTime, todayIso } from "@/lib/format";
 import { useDocumentTitle } from "@/lib/hooks";
 
 const statusLabels: Record<ClubBookStatus, string> = { planned: "Planned", current: "Reading now", completed: "Completed" };
@@ -189,11 +189,11 @@ function AnnualList({ year }: { year: number }) {
                   <div className="flex flex-wrap justify-end">
                     {!b.archivedAt && (
                       <>
-                        <IconButton icon={ArrowUp} label={`Move ${b.edition.title} up`} disabled={index === 0 || reorder.isPending} onClick={() => move(index, -1)} />
+                        <IconButton icon={ArrowUp} label={`Move ${b.edition.title} up`} disabled={index === 0 || reorder.isPending || q.isFetching} onClick={() => move(index, -1)} />
                         <IconButton
                           icon={ArrowDown}
                           label={`Move ${b.edition.title} down`}
-                          disabled={index === active.length - 1 || reorder.isPending}
+                          disabled={index === active.length - 1 || reorder.isPending || q.isFetching}
                           onClick={() => move(index, 1)}
                         />
                         <IconButton icon={Pencil} label={`Edit ${b.edition.title}`} onClick={() => setEditing(b)} />
@@ -325,7 +325,7 @@ function Assignments() {
   const [when, setWhen] = useState<"current" | "past">("current");
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Assignment | null>(null);
-  const q = useQuery({ queryKey: ["assignments", when], queryFn: () => api<Assignment[]>(`/api/club/assignments?when=${when}`) });
+  const q = useQuery({ queryKey: ["assignments", when], queryFn: () => api<Assignment[]>(`/api/club/assignments?when=${when}&today=${todayIso()}`) });
   const archive = useSharedMutation((a: Assignment) => api(`/api/club/assignments/${a.id}/archive`, { body: { expectedVersion: a.version } }), [["assignments"], ["dashboard"]], "Assignment archived");
   return (
     <section>

@@ -1,48 +1,60 @@
+/* Self-hosted EB Garamond (latin subset): a classic book face that matches the club's logo. */
+@import "@fontsource/eb-garamond/latin-400.css";
+@import "@fontsource/eb-garamond/latin-400-italic.css";
+@import "@fontsource/eb-garamond/latin-500.css";
+@import "@fontsource/eb-garamond/latin-600.css";
 @import "tailwindcss";
 
 /*
- * Design tokens. Components use these CSS variables through the Tailwind
- * theme below, so light/dark themes only change values here.
+ * Design tokens — "old library" palette taken from the Teel Ridge logo.
+ * Light: aged parchment, sepia ink, the logo's forest green, oxblood accents.
+ * Dark: a reading room at night — deep green-black leather, candlelit cream ink.
  */
 :root {
-  --color-paper: #f7f3ea;
-  --color-surface: #fffdf8;
-  --color-surface-2: #f1ebdf;
-  --color-ink: #1f2a24;
-  --color-ink-muted: #5b6660;
-  --color-line: #e2dacb;
-  --color-accent: #2f5d46;
-  --color-accent-strong: #234936;
-  --color-accent-soft: #e3eee7;
-  --color-on-accent: #ffffff;
-  --color-highlight: #b7791f;
-  --color-highlight-soft: #fbf0dc;
-  --color-danger: #b42318;
-  --color-danger-soft: #fdecea;
-  --color-success: #2e7d4f;
-  --focus-ring: #b7791f;
-  --radius: 0.75rem;
+  --color-paper: #f1e7d0;
+  --color-surface: #faf5e8;
+  --color-surface-2: #ece0c3;
+  --color-ink: #2a2319;
+  --color-ink-muted: #6a5c46;
+  --color-line: #d6c49f;
+  --color-accent: #213a2f;
+  --color-accent-strong: #15271f;
+  --color-accent-soft: #dde2cf;
+  --color-on-accent: #f6eedb;
+  --color-highlight: #8b3326;
+  --color-highlight-soft: #f2ddd0;
+  --color-gold: #9c7a34;
+  --color-danger: #9b2c1f;
+  --color-danger-soft: #f5dcd4;
+  --color-success: #2f5e3f;
+  --focus-ring: #9c7a34;
+  --radius: 0.375rem;
+  --paper-grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .35  0 0 0 0 .27  0 0 0 0 .15  0 0 0 .09 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  --shadow-book: 0 1px 1px rgb(60 40 10 / 0.18), 0 6px 14px -6px rgb(60 40 10 / 0.35);
   color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --color-paper: #121815;
-    --color-surface: #1a221e;
-    --color-surface-2: #222c27;
-    --color-ink: #ece7dc;
-    --color-ink-muted: #a8b0aa;
-    --color-line: #2f3a34;
-    --color-accent: #7fb89a;
-    --color-accent-strong: #9ccbb2;
-    --color-accent-soft: #23352c;
-    --color-on-accent: #0f1512;
-    --color-highlight: #e0a64a;
-    --color-highlight-soft: #3a2f1c;
-    --color-danger: #f28b82;
-    --color-danger-soft: #3b1f1d;
-    --color-success: #7fcf9d;
-    --focus-ring: #e0a64a;
+    --color-paper: #151a16;
+    --color-surface: #1c231e;
+    --color-surface-2: #253028;
+    --color-ink: #efe4c8;
+    --color-ink-muted: #b7a988;
+    --color-line: #3a4638;
+    --color-accent: #d9c690;
+    --color-accent-strong: #eadcad;
+    --color-accent-soft: #2b3a2f;
+    --color-on-accent: #16201a;
+    --color-highlight: #e0946f;
+    --color-highlight-soft: #3d2a20;
+    --color-gold: #cfae62;
+    --color-danger: #f0998a;
+    --color-danger-soft: #3e2220;
+    --color-success: #9fcb9f;
+    --focus-ring: #cfae62;
+    --paper-grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 .95  0 0 0 0 .8  0 0 0 .05 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+    --shadow-book: 0 1px 1px rgb(0 0 0 / 0.4), 0 8px 18px -6px rgb(0 0 0 / 0.6);
     color-scheme: dark;
   }
 }
@@ -60,35 +72,97 @@
   --color-on-accent: var(--color-on-accent);
   --color-highlight: var(--color-highlight);
   --color-highlight-soft: var(--color-highlight-soft);
+  --color-gold: var(--color-gold);
   --color-danger: var(--color-danger);
   --color-danger-soft: var(--color-danger-soft);
   --color-success: var(--color-success);
-  --font-serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Times New Roman", serif;
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-serif: "EB Garamond", "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  --font-sans: "EB Garamond", "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
 }
 
 html {
   -webkit-text-size-adjust: 100%;
+  font-size: 106.25%; /* 17px: Garamond reads small */
 }
 
 body {
-  background: var(--color-paper);
+  background-color: var(--color-paper);
+  /* Paper grain plus a soft vignette, like an old page. */
+  background-image:
+    radial-gradient(ellipse at center, transparent 55%, rgb(120 90 40 / 0.07) 100%),
+    var(--paper-grain);
+  background-attachment: fixed;
   color: var(--color-ink);
-  font-family: var(--font-sans);
+  font-family: var(--font-serif);
+  font-feature-settings: "kern", "liga", "onum";
   min-height: 100dvh;
   -webkit-font-smoothing: antialiased;
+}
+
+@media (prefers-color-scheme: dark) {
+  body {
+    background-image:
+      radial-gradient(ellipse at center, transparent 50%, rgb(0 0 0 / 0.35) 100%),
+      var(--paper-grain);
+  }
 }
 
 h1,
 h2,
 h3 {
   font-family: var(--font-serif);
-  letter-spacing: -0.01em;
+  font-weight: 500;
+  letter-spacing: 0.005em;
+  color: var(--color-ink);
+}
+
+/* Letter-spaced small capitals, echoing "BOOK CLUB" in the logo. */
+.smallcaps {
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.12em;
+}
+
+/* A printer's rule with a centred diamond. */
+.ornament {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: var(--color-gold);
+}
+.ornament::before,
+.ornament::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--color-line), transparent);
+}
+
+/* Bookplate frame: a thin outer rule and an inner hairline. */
+.bookplate {
+  box-shadow:
+    inset 0 0 0 3px var(--color-surface),
+    inset 0 0 0 4px color-mix(in srgb, var(--color-line) 70%, transparent);
+}
+
+/* Drop cap for long passages. */
+.dropcap::first-letter {
+  float: left;
+  font-size: 3.1em;
+  line-height: 0.85;
+  padding: 0.08em 0.1em 0 0;
+  color: var(--color-accent);
 }
 
 :focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
+}
+
+input,
+textarea,
+select,
+button {
+  font-family: inherit;
 }
 
 .safe-bottom {
@@ -105,5 +179,5 @@ h3 {
 }
 
 dialog::backdrop {
-  background: rgb(0 0 0 / 0.45);
+  background: rgb(30 20 5 / 0.5);
 }

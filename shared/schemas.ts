@@ -201,9 +201,33 @@ export const editionUpdateSchema = manualEditionSchema.extend({ expectedVersion:
  * Add an edition found through a catalogue provider. The server re-fetches the
  * metadata itself; client-supplied metadata is never trusted.
  */
+/**
+ * Metadata from the search result the member picked. It is validated as
+ * strictly as manual entry (members can already add any book by hand), lets
+ * the server save the edition instantly, and is then enriched in the
+ * background from the provider itself.
+ */
+export const catalogHintSchema = z.object({
+  title: plainText(300, 1),
+  subtitle: z.preprocess(emptyToNull, plainText(300).nullable()).default(null),
+  authors: z.array(plainText(150, 1)).max(20).default([]),
+  isbn13: z.preprocess(emptyToNull, z.string().regex(/^\d{13}$/).nullable()).default(null),
+  isbn10: z.preprocess(emptyToNull, z.string().regex(/^\d{9}[\dX]$/).nullable()).default(null),
+  publisher: z.preprocess(emptyToNull, plainText(200).nullable()).default(null),
+  publishedYear: z.preprocess(emptyToNull, z.number().int().min(0).max(2200).nullable()).default(null),
+  pageCount: z.preprocess(emptyToNull, z.number().int().min(1).max(50_000).nullable()).default(null),
+  coverUrl: z.preprocess(emptyToNull, httpsUrl.nullable()).default(null),
+  format: z.enum(BOOK_FORMATS).default("unknown"),
+});
+export type CatalogHint = z.output<typeof catalogHintSchema>;
+
 export const providerEditionSchema = z.discriminatedUnion("provider", [
-  z.object({ provider: z.literal("google_books"), providerId: z.string().regex(/^[A-Za-z0-9_-]{4,40}$/) }),
-  z.object({ provider: z.literal("open_library"), providerId: z.string().regex(/^OL\d+M$/) }),
+  z.object({
+    provider: z.literal("google_books"),
+    providerId: z.string().regex(/^[A-Za-z0-9_-]{4,40}$/),
+    hint: catalogHintSchema.optional(),
+  }),
+  z.object({ provider: z.literal("open_library"), providerId: z.string().regex(/^OL\d+M$/), hint: catalogHintSchema.optional() }),
   z.object({ provider: z.literal("isbn"), providerId: isbnInput.refine((v) => v !== "", "ISBN required") }),
 ]);
 

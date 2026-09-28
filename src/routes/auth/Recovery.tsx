@@ -1,6 +1,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { MailCheck } from "lucide-react";
-import { useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import type { z } from "zod";
@@ -8,7 +9,7 @@ import { forgotPasswordSchema, resetPasswordSchema } from "@shared/schemas";
 import { Turnstile, type TurnstileHandle } from "@/components/Turnstile";
 import { Alert, Button, Field, Input } from "@/components/ui";
 import { errorMessage } from "@/lib/api";
-import { requestPasswordReset, resendVerification, resetPassword } from "@/lib/auth";
+import { requestPasswordReset, resendVerification, resetPassword, sessionKey } from "@/lib/auth";
 import { AuthLayout } from "./AuthLayout";
 
 export function ForgotPasswordPage() {
@@ -147,6 +148,11 @@ export function CheckEmailPage() {
 export function VerifiedPage() {
   const [params] = useSearchParams();
   const error = params.get("error");
+  const qc = useQueryClient();
+  // Confirming the email signs the member in: drop any cached "signed out" state.
+  useEffect(() => {
+    void qc.invalidateQueries({ queryKey: sessionKey });
+  }, [qc]);
   return (
     <AuthLayout title={error ? "Link not valid" : "Email confirmed"}>
       {error ? (

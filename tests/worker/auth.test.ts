@@ -231,3 +231,35 @@ describe("account changes", () => {
     expect((await call("/api/account/me", { cookie: b.cookie, ip: b.ip })).status).toBe(200);
   });
 });
+
+describe("changing password", () => {
+  it("keeps this device signed in and signs out the others", async () => {
+    const m = await createMember("changer");
+    // A second device.
+    const other = await call("/api/auth/sign-in/email", { body: { email: m.email, password: m.password }, headers: { "x-turnstile-token": "ok" }, ip: m.ip });
+    const otherCookie = cookieFrom(other);
+    expect((await call("/api/account/me", { cookie: otherCookie, ip: m.ip })).status).toBe(200);
+
+    const res = await call("/api/account/password", {
+      cookie: m.cookie,
+      ip: m.ip,
+      body: { currentPassword: m.password, newPassword: "a brand new passphrase", confirmPassword: "a brand new passphrase", revokeOtherSessions: true },
+    });
+    expect(res.status).toBe(200);
+    const fresh = cookieFrom(res, m.cookie);
+    expect(fresh).not.toBe(m.cookie);
+    expect((await call("/api/account/me", { cookie: fresh, ip: m.ip })).status).toBe(200);
+    expect((await call("/api/account/me", { cookie: otherCookie, ip: m.ip })).status).toBe(401);
+  });
+
+  it("rejects a wrong current password", async () => {
+    const m = await createMember("wrongpw");
+    const res = await call("/api/account/password", {
+      cookie: m.cookie,
+      ip: m.ip,
+      body: { currentPassword: "not my password at all", newPassword: "a brand new passphrase", confirmPassword: "a brand new passphrase", revokeOtherSessions: false },
+    });
+    expect(res.status).toBe(400);
+    expect((await call("/api/account/me", { cookie: m.cookie, ip: m.ip })).status).toBe(200);
+  });
+});

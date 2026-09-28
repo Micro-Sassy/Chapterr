@@ -86,7 +86,8 @@ worker/       Hono API, auth, email, realtime Durable Object, catalogue provider
 migrations/   D1 SQL migrations (applied in order)
 tests/worker/ API, permission, realtime, sharing and import tests (Workers runtime)
 e2e/          Playwright journeys
-public/       Manifest, icons, robots.txt, _headers
+public/       Manifest, icons, logos (public/brand), robots.txt, _headers
+brand/source/ Original club logo files; `npm run brand` regenerates logos, app icons and favicon from them
 docs/         Architecture and security notes
 ```
 

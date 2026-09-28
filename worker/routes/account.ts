@@ -135,7 +135,7 @@ accountRoutes.post("/email", async (c) => {
   if (input.newEmail === user.email) throw badRequest("That is already your email address", { newEmail: ["Same as current email"] });
   try {
     await getAuth(c.env).api.changeEmail({
-      body: { newEmail: input.newEmail, callbackURL: "/settings?emailChanged=1" },
+      body: { newEmail: input.newEmail, callbackURL: "/settings?tab=account&emailChanged=1" },
       headers: c.req.raw.headers,
     });
   } catch (err) {
@@ -149,21 +149,28 @@ accountRoutes.post("/password", async (c) => {
   const user = c.get("user");
   const input = await parseBody(c, changePasswordSchema);
   await enforceRateLimit(c.env, "change-password", user.id, { window: 15 * 60, max: 10 });
-  const otherSessions = await all<{ id: string }>(c.env.DB, 'SELECT id FROM "session" WHERE "userId" = ? AND id <> ?', user.id, c.get("session").id);
+  // With revokeOtherSessions Better Auth replaces *every* session (this one
+  // included) with a fresh one, so remember them all to close their sockets.
+  const previousSessions = await all<{ id: string }>(c.env.DB, 'SELECT id FROM "session" WHERE "userId" = ?', user.id);
+  let authHeaders: Headers;
   try {
-    await getAuth(c.env).api.changePassword({
+    const result = await getAuth(c.env).api.changePassword({
       body: { currentPassword: input.currentPassword, newPassword: input.newPassword, revokeOtherSessions: input.revokeOtherSessions },
       headers: c.req.raw.headers,
-      asResponse: false,
+      returnHeaders: true,
     });
+    authHeaders = result.headers;
   } catch (err) {
     const msg = authErrorMessage(err, "Could not change password");
     throw new ApiError(400, "invalid_password", msg, /password/i.test(msg) ? { fields: { currentPassword: [msg] } } : {});
   }
   if (input.revokeOtherSessions) {
-    // Close realtime sockets that belonged to the now-revoked sessions.
-    c.executionCtx.waitUntil(Promise.all(otherSessions.map((s) => disconnectSession(c.env, s.id))));
+    // Close realtime sockets that belonged to the now-revoked sessions; this
+    // browser reconnects with its new session cookie.
+    c.executionCtx.waitUntil(Promise.all(previousSessions.map((s) => disconnectSession(c.env, s.id))));
   }
+  // Forward the replacement session cookie so this device stays signed in.
+  for (const cookie of authHeaders.getSetCookie()) c.header("Set-Cookie", cookie, { append: true });
   return c.json({ ok: true });
 });
 

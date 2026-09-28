@@ -64,8 +64,7 @@ async function describe(db: D1Database, r: Row): Promise<string> {
 shareRoutes.get("/", async (c) => {
   const user = c.get("user");
   const rows = await all<Row>(c.env.DB, "SELECT * FROM share_links WHERE created_by = ? ORDER BY created_at DESC LIMIT 200", user.id);
-  const out: ShareLink[] = [];
-  for (const r of rows) out.push(mapShare(r, await describe(c.env.DB, r)));
+  const out: ShareLink[] = await Promise.all(rows.map(async (r) => mapShare(r, await describe(c.env.DB, r))));
   return c.json(out);
 });
 

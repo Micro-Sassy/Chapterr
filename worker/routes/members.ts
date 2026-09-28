@@ -38,20 +38,18 @@ memberRoutes.get("/:username", async (c) => {
   const year = currentYear();
   const own = memberId === viewer.id;
   const vis = own ? "" : " AND visibility = 'club'";
-  const counts = await all<{ status: string; n: number }>(
-    c.env.DB,
-    `SELECT status, COUNT(*) AS n FROM user_books WHERE user_id = ?${vis} GROUP BY status`,
-    memberId,
-  );
-  const finishedThisYear = await first<{ n: number }>(
-    c.env.DB,
-    `SELECT COUNT(*) AS n FROM user_books WHERE user_id = ? AND status = 'finished' AND substr(finished_at, 1, 4) = ?${vis}`,
-    memberId,
-    String(year),
-  );
-  const reviews = await first<{ n: number }>(c.env.DB, `SELECT COUNT(*) AS n FROM reviews WHERE user_id = ?${vis}`, memberId);
-  const quotes = await first<{ n: number }>(c.env.DB, `SELECT COUNT(*) AS n FROM quotes WHERE user_id = ?${vis}`, memberId);
-  const goal = await personalGoal(c.env.DB, memberId, year);
+  const [counts, finishedThisYear, reviews, quotes, goal] = await Promise.all([
+    all<{ status: string; n: number }>(c.env.DB, `SELECT status, COUNT(*) AS n FROM user_books WHERE user_id = ?${vis} GROUP BY status`, memberId),
+    first<{ n: number }>(
+      c.env.DB,
+      `SELECT COUNT(*) AS n FROM user_books WHERE user_id = ? AND status = 'finished' AND substr(finished_at, 1, 4) = ?${vis}`,
+      memberId,
+      String(year),
+    ),
+    first<{ n: number }>(c.env.DB, `SELECT COUNT(*) AS n FROM reviews WHERE user_id = ?${vis}`, memberId),
+    first<{ n: number }>(c.env.DB, `SELECT COUNT(*) AS n FROM quotes WHERE user_id = ?${vis}`, memberId),
+    personalGoal(c.env.DB, memberId, year),
+  ]);
   const byStatus = Object.fromEntries(counts.map((r) => [r.status, Number(r.n)]));
   const profile: MemberProfile = {
     ...mapMember(row, "m_"),

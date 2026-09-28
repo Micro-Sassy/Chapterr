@@ -16,7 +16,7 @@ import { Dialog } from "@/components/ui/Dialog";
 import { useToast } from "@/components/ui/Toast";
 import { api, ApiRequestError, errorMessage } from "@/lib/api";
 import { useSession } from "@/lib/auth";
-import { authorsLine } from "@/lib/format";
+import { authorsLine, todayIso } from "@/lib/format";
 import { useDocumentTitle } from "@/lib/hooks";
 
 interface EditionResponse {
@@ -46,7 +46,13 @@ function ShelfForm({ editionId, entry, onDone }: { editionId: string; entry: Use
   });
   const status = form.watch("status");
   const save = useMutation({
-    mutationFn: (v: ShelfValues) => api<UserBook>(`/api/library/editions/${editionId}`, { method: "PUT", body: v }),
+    mutationFn: (v: ShelfValues) => {
+      // Default dates use the member's local calendar day, not the server's (UTC).
+      const body = { ...v };
+      if (body.status === "reading" && !body.startedAt && !entry?.startedAt) body.startedAt = todayIso();
+      if (body.status === "finished" && !body.finishedAt && !entry?.finishedAt) body.finishedAt = todayIso();
+      return api<UserBook>(`/api/library/editions/${editionId}`, { method: "PUT", body });
+    },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["library"] });
       void qc.invalidateQueries({ queryKey: ["dashboard"] });
@@ -216,7 +222,17 @@ export function BookDetailPage() {
   const qc = useQueryClient();
   const toast = useToast();
   const [dialog, setDialog] = useState<null | "shelf" | "review" | "quote" | "recommend" | "club" | "genres" | "edit">(null);
-  const edition = useQuery({ queryKey: ["edition", id], queryFn: () => api<EditionResponse>(`/api/books/editions/${id}`) });
+  const edition = useQuery({
+    queryKey: ["edition", id],
+    queryFn: () => api<EditionResponse>(`/api/books/editions/${id}`),
+    // A just-added catalogue book gets its description/details filled in the
+    // background; poll briefly so they appear without a manual refresh.
+    refetchInterval: (q) => {
+      const e = q.state.data?.edition;
+      if (!e || e.description || e.source === "manual" || e.source === "goodreads") return false;
+      return Date.now() - new Date(e.createdAt).getTime() < 30_000 ? 3000 : false;
+    },
+  });
   const shelf = useQuery({ queryKey: ["library", "edition", id], queryFn: () => api<UserBook | null>(`/api/library/editions/${id}`) });
   const reviews = useQuery({ queryKey: ["reviews", "edition", id], queryFn: () => api<Review[]>(`/api/reviews?editionId=${id}`) });
   const quotes = useQuery({ queryKey: ["quotes", "edition", id], queryFn: () => api<Quote[]>(`/api/quotes?editionId=${id}`) });
@@ -230,8 +246,8 @@ export function BookDetailPage() {
   });
 
   useEffect(() => {
-    if (location.hash && reviews.isSuccess) document.getElementById(location.hash.slice(1))?.scrollIntoView();
-  }, [reviews.isSuccess]);
+    if (location.hash && reviews.isSuccess && edition.isSuccess) document.getElementById(location.hash.slice(1))?.scrollIntoView();
+  }, [reviews.isSuccess, edition.isSuccess]);
 
   if (edition.isPending) return <Spinner />;
   if (edition.isError) return <Alert tone="error">{errorMessage(edition.error)}</Alert>;
@@ -245,7 +261,7 @@ export function BookDetailPage() {
         <BookCover url={e.coverUrlLarge ?? e.coverUrl} title={e.title} size="lg" className="self-center sm:self-start" />
         <div className="min-w-0 flex-1 space-y-3">
           <div>
-            <h1 className="text-2xl font-semibold sm:text-3xl">{e.title}</h1>
+            <h1 className="text-3xl sm:text-3xl">{e.title}</h1>
             {e.subtitle && <p className="text-ink-muted">{e.subtitle}</p>}
             <p className="mt-1">{authorsLine(e.authors)}</p>
           </div>

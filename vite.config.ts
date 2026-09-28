@@ -21,7 +21,7 @@ export default defineConfig({
       registerType: "prompt",
       injectRegister: false,
       manifest: false, // served from public/manifest.webmanifest
-      includeAssets: ["favicon.svg", "robots.txt", "icons/*.png"],
+      includeAssets: ["favicon.png", "robots.txt", "icons/*.png", "brand/*.png"],
       workbox: {
         globPatterns: ["**/*.{js,css,html,svg,png,woff2,webmanifest}"],
         // Offline app shell: any navigation that is not an API call falls back

@@ -40,6 +40,8 @@ function mockOpenLibrary() {
   return installFetchMock((url) => {
     if (url.startsWith("https://openlibrary.org/search.json")) return Response.json(olSearch);
     if (url.startsWith("https://openlibrary.org/books/OL51709286M.json")) return Response.json(olEdition);
+    if (url.startsWith("https://openlibrary.org/books/OL77777777M.json"))
+      return Response.json({ ...olEdition, key: "/books/OL77777777M", isbn_13: ["9780261102217"], isbn_10: ["0261102214"], number_of_pages: 310 });
     if (url.startsWith("https://openlibrary.org/works/OL27482W.json")) return Response.json({ description: "A hobbit's tale.", authors: [{ author: { key: "/authors/OL26320A" } }] });
     if (url.startsWith("https://openlibrary.org/authors/OL26320A.json")) return Response.json({ name: "J.R.R. Tolkien" });
     return undefined;
@@ -121,5 +123,59 @@ describe("Goodreads import", () => {
       body: { rows: [{ title: "", authors: [], status: "read" }], totalRows: 1 },
     });
     expect(res.status).toBe(422);
+  });
+});
+
+describe("fast add from a search result", () => {
+  it("saves instantly from the hint and enriches details in the background", async () => {
+    mockOpenLibrary();
+    const res = await as(alice)("/api/books/editions/provider", {
+      body: {
+        provider: "open_library",
+        providerId: "OL77777777M",
+        hint: {
+          title: "The Hobbit",
+          authors: ["J.R.R. Tolkien"],
+          isbn13: "9780261102217",
+          publishedYear: 1984,
+          coverUrl: "https://covers.openlibrary.org/b/id/15223072-M.jpg",
+          format: "paperback",
+        },
+      },
+    });
+    expect([200, 201]).toContain(res.status);
+    const edition = await json(res);
+    expect(res.status).toBe(201);
+    expect(edition.title).toBe("The Hobbit");
+    expect(edition.pageCount).toBeNull(); // not in the hint; filled in afterwards
+    // Background enrichment (awaited by the test harness) filled in the missing details.
+    const detail = await json(await as(alice)(`/api/books/editions/${edition.id}`));
+    expect(detail.edition.pageCount).toBe(310);
+    expect(detail.edition.description).toBe("A hobbit's tale.");
+  });
+
+  it("does not depend on the catalogue being up and ignores untrusted cover hosts", async () => {
+    installFetchMock((url) => (url.includes("openlibrary.org") ? new Response("down", { status: 503 }) : undefined));
+    const res = await as(alice)("/api/books/editions/provider", {
+      body: {
+        provider: "open_library",
+        providerId: "OL99999999M",
+        hint: { title: "Offline Book", authors: ["Someone"], coverUrl: "https://evil.example/tracker.png" },
+      },
+    });
+    expect(res.status).toBe(201);
+    const edition = await json(res);
+    expect(edition.title).toBe("Offline Book");
+    expect(edition.coverUrl).toBeNull();
+  });
+
+  it("returns the existing edition for a provider id already in the catalogue", async () => {
+    installFetchMock((url) => (url.includes("openlibrary.org") ? new Response("down", { status: 503 }) : undefined));
+    const first = await json(
+      await as(alice)("/api/books/editions/provider", { body: { provider: "open_library", providerId: "OL88888888M", hint: { title: "Dup", authors: ["A"] } } }),
+    );
+    const again = await as(alice)("/api/books/editions/provider", { body: { provider: "open_library", providerId: "OL88888888M", hint: { title: "Dup", authors: ["A"] } } });
+    expect(again.status).toBe(200);
+    expect((await json(again)).id).toBe(first.id);
   });
 });

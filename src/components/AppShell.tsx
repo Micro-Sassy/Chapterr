@@ -1,7 +1,6 @@
 import clsx from "clsx";
 import {
   Bell,
-  BookMarked,
   Home,
   Library,
   LogOut,
@@ -23,6 +22,7 @@ import { api } from "@/lib/api";
 import { useSession, useSignOut } from "@/lib/auth";
 import { useOnline } from "@/lib/hooks";
 import { Avatar } from "./Avatar";
+import { Logo } from "./Logo";
 import type { Me } from "@shared/types";
 
 export const NAV = [
@@ -89,13 +89,12 @@ export function AppShell() {
         Skip to content
       </a>
       {/* Desktop / tablet sidebar */}
-      <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col border-r border-line bg-surface md:flex">
-        <div className="flex items-center gap-2 px-5 py-5">
-          <BookMarked className="size-6 text-accent" aria-hidden />
-          <div className="font-serif text-lg leading-tight font-semibold">
-            Teel Ridge
-            <span className="block text-xs font-normal text-ink-muted">Book Club</span>
-          </div>
+      <aside className="sticky top-0 hidden h-dvh w-64 shrink-0 flex-col border-r-4 border-double border-line bg-surface md:flex">
+        <NavLink to="/" className="block px-5 pb-4 pt-6">
+          <Logo variant="stacked" className="mx-auto w-40" />
+        </NavLink>
+        <div className="ornament mx-5 mb-3" aria-hidden>
+          <span className="text-[0.6rem]">&#9670;</span>
         </div>
         <nav aria-label="Main" className="flex-1 overflow-y-auto px-3">
           <ul className="space-y-0.5">
@@ -106,8 +105,10 @@ export function AppShell() {
                   end={"end" in item ? item.end : undefined}
                   className={({ isActive }) =>
                     clsx(
-                      "flex items-center gap-3 rounded-lg px-3 py-2 text-sm",
-                      isActive ? "bg-accent-soft font-semibold text-accent-strong" : "text-ink-muted hover:bg-surface-2 hover:text-ink",
+                      "flex items-center gap-3 rounded-[var(--radius)] border-l-2 px-3 py-1.5 text-[1.02rem]",
+                      isActive
+                        ? "border-gold bg-accent-soft font-semibold text-accent-strong"
+                        : "border-transparent text-ink-muted hover:bg-surface-2 hover:text-ink",
                     )
                   }
                 >
@@ -144,9 +145,8 @@ export function AppShell() {
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-30 flex items-center justify-between gap-2 border-b border-line bg-paper/90 px-4 py-2.5 backdrop-blur md:justify-end">
-          <NavLink to="/" className="flex items-center gap-2 md:hidden">
-            <BookMarked className="size-5 text-accent" aria-hidden />
-            <span className="font-serif font-semibold">Teel Ridge</span>
+          <NavLink to="/" className="flex items-center md:hidden">
+            <Logo variant="horizontal" className="h-9 w-auto" />
           </NavLink>
           <div className="flex items-center gap-1">
             <NavLink

@@ -18,8 +18,8 @@ type Variant = "primary" | "secondary" | "ghost" | "danger";
 type Size = "sm" | "md";
 
 const variants: Record<Variant, string> = {
-  primary: "bg-accent text-on-accent hover:bg-accent-strong disabled:opacity-60",
-  secondary: "bg-surface text-ink border border-line hover:bg-surface-2 disabled:opacity-60",
+  primary: "bg-accent text-on-accent shadow-[inset_0_-2px_0_rgb(0_0_0/0.18)] hover:bg-accent-strong disabled:opacity-60",
+  secondary: "bg-surface text-ink border border-line hover:bg-surface-2 hover:border-gold/60 disabled:opacity-60",
   ghost: "text-ink hover:bg-surface-2 disabled:opacity-50",
   danger: "bg-danger text-white hover:opacity-90 disabled:opacity-60",
 };
@@ -41,8 +41,8 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       type={type}
       disabled={disabled || loading}
       className={clsx(
-        "inline-flex items-center justify-center gap-2 rounded-[var(--radius)] font-medium transition-colors",
-        size === "sm" ? "h-8 px-3 text-sm" : "h-10 px-4 text-sm",
+        "inline-flex items-center justify-center gap-2 rounded-[var(--radius)] font-medium tracking-wide transition-colors",
+        size === "sm" ? "h-8 px-3 text-[0.95rem]" : "h-10 px-4 text-base",
         variants[variant],
         className,
       )}
@@ -71,7 +71,7 @@ export function IconButton({ icon: Icon, label, className, ...rest }: ButtonHTML
 // --- Form fields ------------------------------------------------------------------
 
 const inputBase =
-  "w-full rounded-[var(--radius)] border border-line bg-surface px-3 text-ink placeholder:text-ink-muted/70 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/30 disabled:opacity-60";
+  "w-full rounded-[var(--radius)] border border-line bg-surface px-3 text-base text-ink shadow-[inset_0_1px_2px_rgb(80_60_20/0.08)] placeholder:italic placeholder:text-ink-muted/70 focus:border-accent focus:outline-none focus:ring-2 focus:ring-gold/30 disabled:opacity-60";
 
 export interface FieldProps {
   label: string;
@@ -88,7 +88,7 @@ export function Field({ label, error, hint, children, className }: FieldProps) {
   const describedBy = [hintId, errId].filter(Boolean).join(" ") || undefined;
   return (
     <div className={clsx("space-y-1.5", className)}>
-      <label htmlFor={id} className="block text-sm font-medium text-ink">
+      <label htmlFor={id} className="smallcaps block text-[0.95rem] font-medium text-ink-muted">
         {label}
       </label>
       {children(id, describedBy)}
@@ -146,17 +146,26 @@ export const Checkbox = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInp
 // --- Layout & feedback ----------------------------------------------------------------
 
 export function Card({ className, children, as: As = "section" }: { className?: string; children: ReactNode; as?: "section" | "div" | "article" | "li" }) {
-  return <As className={clsx("rounded-[calc(var(--radius)+4px)] border border-line bg-surface p-4 sm:p-5", className)}>{children}</As>;
+  return (
+    <As className={clsx("bookplate rounded-[var(--radius)] border border-line bg-surface p-4 shadow-[0_1px_0_rgb(80_60_20/0.06),0_10px_24px_-18px_rgb(60_40_10/0.5)] sm:p-5", className)}>
+      {children}
+    </As>
+  );
 }
 
 export function PageHeader({ title, description, actions }: { title: string; description?: ReactNode; actions?: ReactNode }) {
   return (
-    <header className="mb-6 flex flex-wrap items-end justify-between gap-3">
-      <div>
-        <h1 className="text-2xl font-semibold sm:text-3xl">{title}</h1>
-        {description && <p className="mt-1 text-sm text-ink-muted">{description}</p>}
+    <header className="mb-7">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-3xl leading-tight sm:text-4xl">{title}</h1>
+          {description && <p className="mt-1 text-base italic text-ink-muted">{description}</p>}
+        </div>
+        {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
       </div>
-      {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
+      <div className="ornament mt-4" aria-hidden>
+        <span className="text-xs">&#9670;</span>
+      </div>
     </header>
   );
 }
@@ -164,7 +173,7 @@ export function PageHeader({ title, description, actions }: { title: string; des
 export function SectionTitle({ children, action }: { children: ReactNode; action?: ReactNode }) {
   return (
     <div className="mb-3 flex items-center justify-between gap-2">
-      <h2 className="text-lg font-semibold">{children}</h2>
+      <h2 className="smallcaps text-lg font-semibold text-accent">{children}</h2>
       {action}
     </div>
   );
@@ -172,12 +181,14 @@ export function SectionTitle({ children, action }: { children: ReactNode; action
 
 export function Badge({ children, tone = "neutral", className }: { children: ReactNode; tone?: "neutral" | "accent" | "highlight" | "danger"; className?: string }) {
   const tones = {
-    neutral: "bg-surface-2 text-ink-muted",
-    accent: "bg-accent-soft text-accent-strong",
-    highlight: "bg-highlight-soft text-highlight",
-    danger: "bg-danger-soft text-danger",
+    neutral: "border-line bg-surface-2 text-ink-muted",
+    accent: "border-accent/25 bg-accent-soft text-accent-strong",
+    highlight: "border-highlight/25 bg-highlight-soft text-highlight",
+    danger: "border-danger/25 bg-danger-soft text-danger",
   };
-  return <span className={clsx("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium", tones[tone], className)}>{children}</span>;
+  return (
+    <span className={clsx("smallcaps inline-flex items-center gap-1 rounded-sm border px-1.5 py-px text-[0.8rem] font-medium", tones[tone], className)}>{children}</span>
+  );
 }
 
 export function Spinner({ label = "Loading" }: { label?: string }) {
@@ -191,9 +202,9 @@ export function Spinner({ label = "Loading" }: { label?: string }) {
 
 export function EmptyState({ icon: Icon = BookOpen, title, children, action }: { icon?: LucideIcon; title: string; children?: ReactNode; action?: ReactNode }) {
   return (
-    <div className="flex flex-col items-center rounded-[calc(var(--radius)+4px)] border border-dashed border-line px-6 py-10 text-center">
-      <Icon className="mb-3 size-8 text-ink-muted" aria-hidden />
-      <p className="font-medium">{title}</p>
+    <div className="flex flex-col items-center rounded-[var(--radius)] border border-dashed border-line bg-surface/40 px-6 py-10 text-center">
+      <Icon className="mb-3 size-8 text-gold" aria-hidden strokeWidth={1.5} />
+      <p className="text-lg italic">{title}</p>
       {children && <div className="mt-1 max-w-md text-sm text-ink-muted">{children}</div>}
       {action && <div className="mt-4">{action}</div>}
     </div>
@@ -220,14 +231,14 @@ export function ProgressBar({ value, max, label }: { value: number; max: number;
   return (
     <div>
       <div
-        className="h-2.5 overflow-hidden rounded-full bg-surface-2"
+        className="h-2.5 overflow-hidden rounded-full border border-line bg-surface-2"
         role="progressbar"
         aria-label={label}
         aria-valuemin={0}
         aria-valuemax={max}
         aria-valuenow={value}
       >
-        <div className="h-full rounded-full bg-accent transition-[width]" style={{ width: `${pct}%` }} />
+        <div className="h-full rounded-full bg-gradient-to-r from-accent to-gold transition-[width]" style={{ width: `${pct}%` }} />
       </div>
     </div>
   );
@@ -244,8 +255,8 @@ export function Tabs<T extends string>({ value, onChange, tabs, label }: { value
           aria-selected={value === t.value}
           onClick={() => onChange(t.value)}
           className={clsx(
-            "-mb-px whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium",
-            value === t.value ? "border-accent text-accent-strong" : "border-transparent text-ink-muted hover:text-ink",
+            "smallcaps -mb-px whitespace-nowrap border-b-2 px-3 py-2 text-base font-medium",
+            value === t.value ? "border-gold text-accent" : "border-transparent text-ink-muted hover:text-ink",
           )}
         >
           {t.label}

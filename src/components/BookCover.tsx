@@ -10,10 +10,17 @@ export function BookCover({ url, title, size = "sm", className }: { url: string 
     return (
       <div
         aria-hidden
-        className={clsx("flex shrink-0 items-center justify-center rounded-md border border-line bg-surface-2 text-ink-muted", sizes[size], className)}
         title={title}
+        className={clsx(
+          // A plain cloth binding: green board, gilt rule and a darker spine.
+          "relative flex shrink-0 items-center justify-center overflow-hidden rounded-[3px] rounded-l-[2px] bg-accent text-gold shadow-[var(--shadow-book)]",
+          "before:absolute before:inset-y-0 before:left-0 before:w-[8%] before:bg-black/20",
+          "after:absolute after:inset-[9%] after:left-[16%] after:rounded-[1px] after:border after:border-gold/50",
+          sizes[size],
+          className,
+        )}
       >
-        <BookOpen className="size-1/3" />
+        <BookOpen className="relative size-1/3" strokeWidth={1.5} />
       </div>
     );
   }
@@ -24,7 +31,7 @@ export function BookCover({ url, title, size = "sm", className }: { url: string 
       loading="lazy"
       referrerPolicy="no-referrer"
       onError={() => setFailed(true)}
-      className={clsx("shrink-0 rounded-md border border-line bg-surface-2 object-cover", sizes[size], className)}
+      className={clsx("shrink-0 rounded-[3px] rounded-l-[2px] bg-surface-2 object-cover shadow-[var(--shadow-book)]", sizes[size], className)}
     />
   );
 }

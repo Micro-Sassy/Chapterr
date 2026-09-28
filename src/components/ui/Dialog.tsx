@@ -24,7 +24,7 @@ export function Dialog({ open, onClose, title, children, wide }: { open: boolean
         onClose();
       }}
       aria-label={title}
-      className={`m-auto w-[calc(100%-2rem)] ${wide ? "max-w-2xl" : "max-w-lg"} rounded-2xl border border-line bg-surface p-0 text-ink shadow-xl`}
+      className={`m-auto w-[calc(100%-2rem)] ${wide ? "max-w-2xl" : "max-w-lg"} rounded-[var(--radius)] border border-line bg-surface p-0 text-ink shadow-xl`}
     >
       {open && (
         <div className="max-h-[85dvh] overflow-y-auto p-5">

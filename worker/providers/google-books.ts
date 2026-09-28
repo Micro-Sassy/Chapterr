@@ -49,7 +49,11 @@ function stripHtml(value: string | undefined): string | null {
 }
 
 async function call<T>(url: string): Promise<T> {
-  const res = await fetch(url, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(8000) });
+  const res = await fetch(url, {
+    headers: { Accept: "application/json" },
+    signal: AbortSignal.timeout(6000),
+    cf: { cacheTtl: 86400, cacheEverything: true },
+  });
   if (res.status === 404) throw new ProviderError("Not found");
   if (!res.ok) throw new ProviderError(`Google Books HTTP ${res.status}`);
   return (await res.json()) as T;

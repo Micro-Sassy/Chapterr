@@ -10,7 +10,13 @@ function headers(appUrl: string) {
 }
 
 async function call<T>(url: string, appUrl: string): Promise<T> {
-  const res = await fetch(url, { headers: headers(appUrl), redirect: "follow", signal: AbortSignal.timeout(8000) });
+  // Catalogue data changes rarely: let Cloudflare's edge cache it for a day.
+  const res = await fetch(url, {
+    headers: headers(appUrl),
+    redirect: "follow",
+    signal: AbortSignal.timeout(6000),
+    cf: { cacheTtl: 86400, cacheEverything: true },
+  });
   if (res.status === 404) throw new ProviderError("Not found");
   if (!res.ok) throw new ProviderError(`Open Library HTTP ${res.status}`);
   return (await res.json()) as T;
@@ -147,18 +153,16 @@ async function normalizeEdition(ed: OLEdition, appUrl: string): Promise<Normaliz
   const title = clip(ed.title, 300);
   if (!title) throw new ProviderError("Edition has no title");
   const workKey = ed.works?.[0]?.key ?? null;
-  let work: OLWork | null = null;
-  if (workKey) {
-    try {
-      work = await call<OLWork>(`${BASE}${workKey}.json`, appUrl);
-    } catch {
-      work = null;
-    }
-  }
-  const authorKeys = (ed.authors?.map((a) => a.key) ?? work?.authors?.map((a) => a.author?.key).filter((k): k is string => !!k) ?? []).filter(
-    (k) => /^\/authors\/OL\d+A$/.test(k),
-  );
-  const authors = await authorNames(authorKeys, appUrl);
+  const isAuthorKey = (k: string) => /^\/authors\/OL\d+A$/.test(k);
+  const editionAuthorKeys = (ed.authors?.map((a) => a.key) ?? []).filter(isAuthorKey);
+  // Fetch the work (description, author fallback) and the edition's authors in parallel.
+  const [work, editionAuthors] = await Promise.all([
+    workKey ? call<OLWork>(`${BASE}${workKey}.json`, appUrl).catch(() => null) : Promise.resolve(null),
+    editionAuthorKeys.length ? authorNames(editionAuthorKeys, appUrl) : Promise.resolve([] as string[]),
+  ]);
+  const authors = editionAuthors.length
+    ? editionAuthors
+    : await authorNames((work?.authors?.map((a) => a.author?.key).filter((k): k is string => !!k) ?? []).filter(isAuthorKey), appUrl);
   const n13 = normalizeIsbn(ed.isbn_13?.[0] ?? null);
   const n10 = normalizeIsbn(ed.isbn_10?.[0] ?? null);
   const coverId = ed.covers?.find((c) => c > 0);

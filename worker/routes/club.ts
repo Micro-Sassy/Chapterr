@@ -21,7 +21,7 @@ import { ApiError, conflict, notFound } from "../lib/errors";
 import { parseBody, parseWith } from "../lib/http";
 import { auditCols, auditJoins, editionCols, mapAudit, mapEdition, mapEditionOrNull, type Row } from "../lib/mappers";
 import { emailClubUpdate, notifyUsers } from "../lib/notify";
-import { currentYear, newId, nowIso } from "../lib/util";
+import { currentYear, formatMeetingTime, localToday, newId, nowIso } from "../lib/util";
 import { updateVersioned } from "../lib/versioned";
 
 /**
@@ -334,7 +334,7 @@ clubRoutes.post("/meetings", async (c) => {
           c.env,
           user.id,
           title,
-          [`${user.name} scheduled a club meeting starting ${new Date(meeting.startsAt).toUTCString()}.`, ...(meeting.location ? [`Where: ${meeting.location}`] : [])],
+          [`${user.name} scheduled a club meeting for ${formatMeetingTime(meeting.startsAt, c.req.header("x-time-zone"))}.`, ...(meeting.location ? [`Where: ${meeting.location}`] : [])],
           "/club/meetings",
         ),
       ]),
@@ -402,7 +402,7 @@ export async function loadAssignments(db: D1Database, where: string, params: str
 clubRoutes.get("/assignments", async (c) => {
   const when = c.req.query("when") ?? "current";
   const base = includeArchived(c.req.query("archived")) ? "1 = 1" : "a.archived_at IS NULL";
-  const today = nowIso().slice(0, 10);
+  const today = localToday(c.req.query("today"));
   if (when === "past") return c.json(await loadAssignments(c.env.DB, `${base} AND a.due_date < ?`, [today], "a.due_date DESC"));
   if (when === "all") return c.json(await loadAssignments(c.env.DB, base, [], "a.due_date DESC"));
   return c.json(await loadAssignments(c.env.DB, `${base} AND a.due_date >= ?`, [today]));
