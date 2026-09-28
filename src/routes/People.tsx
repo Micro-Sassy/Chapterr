@@ -13,6 +13,7 @@ import { useSession } from "@/lib/auth";
 import { formatDate, relativeTime } from "@/lib/format";
 import { useDocumentTitle } from "@/lib/hooks";
 import { NAV } from "@/components/AppShell";
+import { InstallAppButton } from "@/components/InstallApp";
 
 export function MembersPage() {
   useDocumentTitle("Members");
@@ -234,6 +235,9 @@ export function MorePage() {
             <Users className="size-5 text-accent" aria-hidden />
             <span className="font-medium">Meetings</span>
           </Link>
+        </li>
+        <li className="mt-2 sm:col-span-2">
+          <InstallAppButton className="w-full" label="Install the app on this device" />
         </li>
       </ul>
     </div>

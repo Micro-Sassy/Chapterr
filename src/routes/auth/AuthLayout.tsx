@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router";
+import { InstallAppButton } from "@/components/InstallApp";
 import { Logo } from "@/components/Logo";
 import { useDocumentTitle } from "@/lib/hooks";
 
@@ -19,6 +20,7 @@ export function AuthLayout({ title, subtitle, children, footer }: { title: strin
         <div className="mt-6">{children}</div>
       </main>
       {footer && <div className="mt-6 text-center text-sm text-ink-muted">{footer}</div>}
+      <InstallAppButton variant="ghost" className="mt-4 text-ink-muted" label="Install the app" />
     </div>
   );
 }

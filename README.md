@@ -63,7 +63,7 @@ It is not a commercial product: there are no subscriptions, billing, organizatio
 - Upload the CSV from Goodreads "Export Library". The file is parsed in your browser, previewed, then imported in batches. Ratings map to review feelings, shelves to reading statuses, and re-importing updates instead of duplicating.
 
 **PWA**
-- Installable on phones, tablets and desktops, with maskable icons, an offline app shell, an "update available" prompt, and an offline banner. Private API data is deliberately **not** cached by the service worker.
+- Installable on phones, tablets and desktops from an **Install app** button (sidebar, More page, sign-in page and a dismissible banner on phones) that uses the browser's one-tap install where available and shows step-by-step instructions for iPhone/iPad, Android, Mac Safari and desktop Chrome/Edge otherwise; with maskable icons, an offline app shell, an "update available" prompt, and an offline banner. Private API data is deliberately **not** cached by the service worker.
 
 ## How it is built
 

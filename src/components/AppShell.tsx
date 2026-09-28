@@ -22,6 +22,7 @@ import { api } from "@/lib/api";
 import { useSession, useSignOut } from "@/lib/auth";
 import { useOnline } from "@/lib/hooks";
 import { Avatar } from "./Avatar";
+import { InstallAppButton, InstallBanner } from "./InstallApp";
 import { Logo } from "./Logo";
 import type { Me } from "@shared/types";
 
@@ -120,6 +121,9 @@ export function AppShell() {
             ))}
           </ul>
         </nav>
+        <div className="px-3 pb-3">
+          <InstallAppButton variant="ghost" className="w-full justify-start text-ink-muted" />
+        </div>
         <div className="border-t border-line p-3">
           <div className="flex items-center gap-2 px-2 py-2">
             <Avatar member={member} />
@@ -163,6 +167,7 @@ export function AppShell() {
           </div>
         </header>
 
+        <InstallBanner />
         {!online && (
           <div role="status" className="flex items-center justify-center gap-2 bg-highlight-soft px-4 py-2 text-sm text-ink">
             <WifiOff className="size-4" aria-hidden />

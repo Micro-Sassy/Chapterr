@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import { ToastProvider } from "./components/ui/Toast";
 import { ApiRequestError } from "./lib/api";
+import { listenForInstallPrompt } from "./lib/install";
 import "./styles/index.css";
 
 const queryClient = new QueryClient({
@@ -25,6 +26,8 @@ queryClient.getQueryCache().subscribe((event) => {
     void queryClient.invalidateQueries({ queryKey: ["session"] });
   }
 });
+
+listenForInstallPrompt();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
