@@ -144,14 +144,13 @@ function buildAuth(env: Env) {
 export type Auth = ReturnType<typeof buildAuth>;
 export type AuthSessionData = NonNullable<Awaited<ReturnType<Auth["api"]["getSession"]>>>;
 
-const cache = new WeakMap<Env, Auth>();
-
-/** One Better Auth instance per isolate/env object. */
+/**
+ * A fresh Better Auth instance for each call. Instances must NOT be cached
+ * across requests: Better Auth lazily initialises internal promises on first
+ * use, and in Workers a promise created during one request cannot be awaited
+ * by another — if the first request is cancelled (e.g. a search the browser
+ * aborted), every later request waiting on it hangs until the client gives up.
+ */
 export function getAuth(env: Env): Auth {
-  let auth = cache.get(env);
-  if (!auth) {
-    auth = buildAuth(env);
-    cache.set(env, auth);
-  }
-  return auth;
+  return buildAuth(env);
 }

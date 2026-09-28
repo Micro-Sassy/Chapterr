@@ -67,6 +67,32 @@ libraryRoutes.get("/editions/:editionId", async (c) => {
 });
 
 /** Create or update the member's shelf entry for an edition. */
+/**
+ * One-tap "Add to library" from search results: shelves the edition as
+ * To Be Read with the member's default visibility. Never changes an existing
+ * shelf entry (so a finished book is not reset).
+ */
+libraryRoutes.post("/editions/:editionId/quick-add", async (c) => {
+  const user = c.get("user");
+  const editionId = c.req.param("editionId");
+  await requireEdition(c.env.DB, editionId);
+  const now = nowIso();
+  const res = await run(
+    c.env.DB,
+    `INSERT INTO user_books (id, user_id, edition_id, status, visibility, created_at, updated_at)
+     VALUES (?, ?, ?, 'tbr', COALESCE((SELECT default_visibility FROM profiles WHERE user_id = ?), 'club'), ?, ?)
+     ON CONFLICT (user_id, edition_id) DO NOTHING`,
+    newId(),
+    user.id,
+    editionId,
+    user.id,
+    now,
+    now,
+  );
+  const [book] = await loadUserBooks(c.env.DB, user.id, "ub.user_id = ? AND ub.edition_id = ?", [user.id, editionId]);
+  return c.json({ added: (res.meta.changes ?? 0) > 0, book }, (res.meta.changes ?? 0) > 0 ? 201 : 200);
+});
+
 libraryRoutes.put("/editions/:editionId", async (c) => {
   const user = c.get("user");
   const editionId = c.req.param("editionId");

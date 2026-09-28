@@ -1,11 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Plus, Search } from "lucide-react";
+import { BookmarkCheck, BookmarkPlus, Check, Plus, Search } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { useForm } from "react-hook-form";
 import { Link } from "react-router";
 import { BOOK_FORMATS } from "@shared/constants";
 import { manualEditionSchema, type ManualEditionInput } from "@shared/schemas";
-import type { BookSearchResponse, CatalogResult, EditionDetail, EditionSummary } from "@shared/types";
+import type { BookSearchResponse, CatalogResult, EditionDetail, EditionSummary, UserBook } from "@shared/types";
 import { api, ApiRequestError, errorMessage } from "@/lib/api";
 import { authorsLine } from "@/lib/format";
 import { useDebounced } from "@/lib/hooks";
@@ -157,12 +157,47 @@ export function EditionForm({
  * Search the club catalogue and the free book catalogues (Open Library /
  * Google Books), then return the chosen edition, creating it if needed.
  */
-export function BookPicker({ onPick, pickLabel = "Choose" }: { onPick: (edition: EditionSummary) => void; pickLabel?: string }) {
+function hintFrom(hit: CatalogResult) {
+  return {
+    title: hit.title,
+    subtitle: hit.subtitle,
+    authors: hit.authors,
+    isbn13: hit.isbn13,
+    isbn10: hit.isbn10,
+    publisher: hit.publisher,
+    publishedYear: hit.publishedYear,
+    pageCount: hit.pageCount,
+    coverUrl: hit.coverUrl,
+    format: hit.format,
+  };
+}
+
+/** Save a catalogue search result as a club edition (instant; details fill in on the server afterwards). */
+function saveHit(hit: CatalogResult) {
+  return api<EditionDetail>("/api/books/editions/provider", {
+    // The hint lets the server save the book instantly; it fills in the rest in the background.
+    body: { provider: hit.provider, providerId: hit.providerId, hint: hintFrom(hit) },
+  });
+}
+
+type Pickable = { kind: "local"; edition: EditionSummary } | { kind: "catalog"; hit: CatalogResult };
+const pickKey = (p: Pickable) => (p.kind === "local" ? `e:${p.edition.id}` : `${p.hit.provider}:${p.hit.providerId}`);
+
+export function BookPicker({
+  onPick,
+  pickLabel = "Choose",
+  quickAdd = false,
+}: {
+  onPick: (edition: EditionSummary) => void;
+  pickLabel?: string;
+  /** Show a one-tap "Add to library" button on every result. */
+  quickAdd?: boolean;
+}) {
   const qc = useQueryClient();
   const toast = useToast();
   const [q, setQ] = useState("");
   const [manual, setManual] = useState(false);
-  const debounced = useDebounced(q.trim(), 450);
+  const debounced = useDebounced(q.trim(), 350);
   const search = useQuery({
     queryKey: ["book-search", debounced],
     queryFn: ({ signal }) => api<BookSearchResponse>(`/api/books/search?q=${encodeURIComponent(debounced)}`, { signal }),
@@ -170,32 +205,49 @@ export function BookPicker({ onPick, pickLabel = "Choose" }: { onPick: (edition:
     staleTime: 5 * 60 * 1000,
   });
   const add = useMutation({
-    mutationFn: (hit: CatalogResult) =>
-      api<EditionDetail>("/api/books/editions/provider", {
-        body: {
-          provider: hit.provider,
-          providerId: hit.providerId,
-          // Lets the server save the book instantly; it fills in the rest in the background.
-          hint: {
-            title: hit.title,
-            subtitle: hit.subtitle,
-            authors: hit.authors,
-            isbn13: hit.isbn13,
-            isbn10: hit.isbn10,
-            publisher: hit.publisher,
-            publishedYear: hit.publishedYear,
-            pageCount: hit.pageCount,
-            coverUrl: hit.coverUrl,
-            format: hit.format,
-          },
-        },
-      }),
+    mutationFn: saveHit,
     onSuccess: (edition) => {
       void qc.invalidateQueries({ queryKey: ["book-search"] });
       onPick(edition);
     },
     onError: (err) => toast(errorMessage(err), "error"),
   });
+  // Books shelved from this search, keyed by result.
+  const [shelved, setShelved] = useState<Record<string, true>>({});
+  const shelve = useMutation({
+    mutationFn: async (p: Pickable) => {
+      const edition = p.kind === "local" ? p.edition : await saveHit(p.hit);
+      return api<{ added: boolean; book: UserBook }>(`/api/library/editions/${edition.id}/quick-add`, { method: "POST" });
+    },
+    onSuccess: (res, p) => {
+      setShelved((s) => ({ ...s, [pickKey(p)]: true }));
+      void qc.invalidateQueries({ queryKey: ["library"] });
+      void qc.invalidateQueries({ queryKey: ["dashboard"] });
+      toast(res.added ? `Added “${res.book.edition.title}” to your To Be Read shelf` : `“${res.book.edition.title}” is already in your library`);
+    },
+    onError: (err) => toast(errorMessage(err), "error"),
+  });
+
+  const actions = (p: Pickable, pick: ReactNode) => {
+    if (!quickAdd) return pick;
+    const key = pickKey(p);
+    const done = shelved[key];
+    return (
+      <div className="flex shrink-0 flex-col gap-1.5 sm:flex-row">
+        <Button
+          size="sm"
+          variant={done ? "ghost" : "primary"}
+          icon={done ? BookmarkCheck : BookmarkPlus}
+          disabled={done}
+          loading={shelve.isPending && shelve.variables && pickKey(shelve.variables) === key}
+          onClick={() => shelve.mutate(p)}
+        >
+          {done ? "In library" : "Add to library"}
+        </Button>
+        {pick}
+      </div>
+    );
+  };
 
   const local = search.data?.local ?? [];
   const localIds = new Set(local.map((l) => l.id));
@@ -223,7 +275,16 @@ export function BookPicker({ onPick, pickLabel = "Choose" }: { onPick: (edition:
           <ul className="space-y-2">
             {local.map((e) => (
               <li key={e.id}>
-                <BookRow edition={e} link={false} action={<Button size="sm" variant="secondary" icon={Check} onClick={() => onPick(e)}>{pickLabel}</Button>} />
+                <BookRow
+                  edition={e}
+                  link={false}
+                  action={actions(
+                    { kind: "local", edition: e },
+                    <Button size="sm" variant="secondary" icon={Check} onClick={() => onPick(e)}>
+                      {pickLabel}
+                    </Button>,
+                  )}
+                />
               </li>
             ))}
           </ul>
@@ -252,7 +313,8 @@ export function BookPicker({ onPick, pickLabel = "Choose" }: { onPick: (edition:
                     pageCount: hit.pageCount,
                   }}
                   meta={hit.isbn13 ? `ISBN ${hit.isbn13}${hit.publisher ? ` · ${hit.publisher}` : ""}` : hit.publisher}
-                  action={
+                  action={actions(
+                    { kind: "catalog", hit },
                     <Button
                       size="sm"
                       variant="secondary"
@@ -261,8 +323,8 @@ export function BookPicker({ onPick, pickLabel = "Choose" }: { onPick: (edition:
                       onClick={() => add.mutate(hit)}
                     >
                       {pickLabel}
-                    </Button>
-                  }
+                    </Button>,
+                  )}
                 />
               </li>
             ))}

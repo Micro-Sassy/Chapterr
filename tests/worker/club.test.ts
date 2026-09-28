@@ -105,3 +105,26 @@ describe("shared club data", () => {
     expect(archived.archivedAt).toBeTruthy();
   });
 });
+
+describe("quick add to library", () => {
+  it("shelves a book as To Be Read once and never resets an existing entry", async () => {
+    const m = await createMember("quick");
+    const req = as(m);
+    const editionId = await seedEdition("Quick Add Book");
+    const first = await req(`/api/library/editions/${editionId}/quick-add`, { method: "POST" });
+    expect(first.status).toBe(201);
+    const body = await json<{ added: boolean; book: { status: string; visibility: string } }>(first);
+    expect(body.added).toBe(true);
+    expect(body.book.status).toBe("tbr");
+
+    // Mark it finished, then quick-add again: nothing changes.
+    await req(`/api/library/editions/${editionId}`, { method: "PUT", body: { editionId, status: "finished" } });
+    const again = await req(`/api/library/editions/${editionId}/quick-add`, { method: "POST" });
+    expect(again.status).toBe(200);
+    const b2 = await json<{ added: boolean; book: { status: string } }>(again);
+    expect(b2.added).toBe(false);
+    expect(b2.book.status).toBe("finished");
+
+    expect((await req(`/api/library/editions/missing-edition-id/quick-add`, { method: "POST" })).status).toBe(404);
+  });
+});

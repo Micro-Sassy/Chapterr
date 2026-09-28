@@ -8,6 +8,10 @@
   // Better Auth relies on AsyncLocalStorage, which is provided by nodejs_compat.
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
+  // Run the Worker next to the D1 database rather than next to the visitor:
+  // each API call makes several sequential queries, so this saves a
+  // cross-country round trip per query.
+  "placement": { "mode": "smart" },
 
   // Static SPA assets (built by Vite). Every request runs the Worker first so
   // it can force HTTPS and add security headers; private data (/api/*) is
