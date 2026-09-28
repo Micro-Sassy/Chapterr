@@ -88,11 +88,22 @@ export function InstallSteps({ platform }: { platform: InstallPlatform }) {
 }
 
 /** "Install app": uses the browser's one-tap dialog when offered, otherwise shows step-by-step instructions. */
-export function InstallAppButton({ className, variant = "secondary", label = "Install app" }: { className?: string; variant?: "primary" | "secondary" | "ghost"; label?: string }) {
+export function InstallAppButton({
+  className,
+  variant = "secondary",
+  label = "Install app",
+  iconOnly = false,
+}: {
+  className?: string;
+  variant?: "primary" | "secondary" | "ghost";
+  label?: string;
+  iconOnly?: boolean;
+}) {
   const { standalone, justInstalled, canPrompt } = useInstallState();
   const [open, setOpen] = useState(false);
   if (standalone) return null;
   if (justInstalled) {
+    if (iconOnly) return null;
     return <p className={clsx("text-sm italic text-ink-muted", className)}>Installed — open it from your home screen or apps.</p>;
   }
   return (
@@ -100,7 +111,9 @@ export function InstallAppButton({ className, variant = "secondary", label = "In
       <Button
         variant={variant}
         icon={Download}
-        className={className}
+        className={clsx(iconOnly && "px-0", className)}
+        aria-label={iconOnly ? label : undefined}
+        title={iconOnly ? label : undefined}
         onClick={async () => {
           if (canPrompt) {
             const accepted = await promptInstall();
@@ -108,7 +121,7 @@ export function InstallAppButton({ className, variant = "secondary", label = "In
           } else setOpen(true);
         }}
       >
-        {label}
+        {!iconOnly && label}
       </Button>
       <InstallDialog open={open} onClose={() => setOpen(false)} />
     </>

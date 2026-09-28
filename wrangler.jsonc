@@ -9,13 +9,14 @@
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
 
-  // Static SPA assets (built by Vite). /api/* always runs the Worker first so
-  // private data is never served by the asset layer.
+  // Static SPA assets (built by Vite). Every request runs the Worker first so
+  // it can force HTTPS and add security headers; private data (/api/*) is
+  // never served by the asset layer.
   "assets": {
     "directory": "./dist/client",
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/*"]
+    "run_worker_first": true
   },
 
   // D1 database. Replace database_id with the ID printed by

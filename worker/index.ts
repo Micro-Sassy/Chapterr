@@ -20,12 +20,13 @@ import { notificationRoutes } from "./routes/notifications";
 import { goalRoutes, libraryRoutes, quoteRoutes, recommendationRoutes, reviewRoutes } from "./routes/personal";
 import { publicRoutes, shareRoutes } from "./routes/shares";
 import { purgeRateLimits } from "./security/rate-limit";
-import { sameOriginGuard, securityHeaders } from "./security/headers";
+import { requireHttps, sameOriginGuard, securityHeaders } from "./security/headers";
 
 export { ClubRealtime } from "./realtime/ClubRealtime";
 
 const app = new Hono<AppEnv>();
 
+app.use("*", requireHttps);
 app.use("*", securityHeaders);
 app.use(
   "/api/*",

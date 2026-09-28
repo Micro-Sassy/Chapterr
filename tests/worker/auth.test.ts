@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { createExecutionContext } from "cloudflare:test";
+import worker from "../../worker/index";
 import { call, cookieFrom, createMember, installFetchMock, json, latestEmail, linkIn, nextIp, testEnv } from "./helpers";
 
 beforeEach(() => {
@@ -199,7 +201,7 @@ describe("rate limiting", () => {
       if (last === 429) break;
     }
     expect(last).toBe(429);
-  });
+  }, 30_000); // ~200 sign-in attempts, each hashing a password
 });
 
 describe("account changes", () => {
@@ -261,5 +263,20 @@ describe("changing password", () => {
     });
     expect(res.status).toBe(400);
     expect((await call("/api/account/me", { cookie: m.cookie, ip: m.ip })).status).toBe(200);
+  });
+});
+
+describe("encrypted connections", () => {
+  it("redirects plain http to https", async () => {
+    const res = await worker.fetch(new Request("http://bookclub.example.com/library?tab=tbr"), testEnv, createExecutionContext());
+    expect(res.status).toBe(301);
+    expect(res.headers.get("location")).toBe("https://bookclub.example.com/library?tab=tbr");
+    const post = await worker.fetch(new Request("http://bookclub.example.com/api/health", { method: "POST" }), testEnv, createExecutionContext());
+    expect(post.status).toBe(308);
+  });
+
+  it("sends HSTS over https", async () => {
+    const res = await worker.fetch(new Request("https://bookclub.example.com/api/health"), testEnv, createExecutionContext());
+    expect(res.headers.get("strict-transport-security")).toMatch(/max-age=63072000/);
   });
 });

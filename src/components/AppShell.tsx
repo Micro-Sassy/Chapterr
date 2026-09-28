@@ -5,6 +5,8 @@ import {
   Library,
   LogOut,
   Menu,
+  PanelLeftClose,
+  PanelLeftOpen,
   MessageCircle,
   Quote,
   Settings,
@@ -17,6 +19,7 @@ import {
   Search,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router";
 import { api } from "@/lib/api";
 import { useSession, useSignOut } from "@/lib/auth";
@@ -74,6 +77,32 @@ function CountBadge({ count, label }: { count: number; label: string }) {
   );
 }
 
+const COLLAPSE_KEY = "trbc:sidebar-collapsed";
+
+function readCollapsed(): boolean {
+  try {
+    return localStorage.getItem(COLLAPSE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+/** Desktop sidebar can shrink to an icon rail; the choice is remembered on this device. */
+function useSidebarCollapsed() {
+  const [collapsed, setCollapsed] = useState(readCollapsed);
+  const toggle = () =>
+    setCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(COLLAPSE_KEY, next ? "1" : "0");
+      } catch {
+        /* storage unavailable: remember for this visit only */
+      }
+      return next;
+    });
+  return [collapsed, toggle] as const;
+}
+
 export function AppShell() {
   const online = useOnline();
   const { data: session } = useSession();
@@ -81,6 +110,7 @@ export function AppShell() {
   const unread = useUnread();
   const signOut = useSignOut();
   const navigate = useNavigate();
+  const [collapsed, toggleSidebar] = useSidebarCollapsed();
 
   const member = me.data ?? (session ? { displayName: session.user.name, avatarUrl: session.user.image } : null);
 
@@ -90,47 +120,63 @@ export function AppShell() {
         Skip to content
       </a>
       {/* Desktop / tablet sidebar */}
-      <aside className="sticky top-0 hidden h-dvh w-64 shrink-0 flex-col border-r-4 border-double border-line bg-surface md:flex">
-        <NavLink to="/" className="block px-5 pb-4 pt-6">
-          <Logo variant="stacked" className="mx-auto w-40" />
+      <aside
+        id="sidebar"
+        className={clsx(
+          "sticky top-0 hidden h-dvh shrink-0 flex-col border-r-4 border-double border-line bg-surface transition-[width] duration-200 md:flex",
+          collapsed ? "w-[4.5rem]" : "w-64",
+        )}
+      >
+        <NavLink to="/" aria-label="Home" className={clsx("block", collapsed ? "px-2 pb-3 pt-5" : "px-5 pb-4 pt-6")}>
+          {collapsed ? <Logo variant="mark" className="mx-auto w-12" /> : <Logo variant="stacked" className="mx-auto w-40" />}
         </NavLink>
-        <div className="ornament mx-5 mb-3" aria-hidden>
+        <div className={clsx("ornament mb-3", collapsed ? "mx-3" : "mx-5")} aria-hidden>
           <span className="text-[0.6rem]">&#9670;</span>
         </div>
-        <nav aria-label="Main" className="flex-1 overflow-y-auto px-3">
+        <nav aria-label="Main" className={clsx("flex-1 overflow-y-auto overflow-x-hidden", collapsed ? "px-2" : "px-3")}>
           <ul className="space-y-0.5">
             {NAV.map((item) => (
               <li key={item.to}>
                 <NavLink
                   to={item.to}
                   end={"end" in item ? item.end : undefined}
+                  title={collapsed ? item.label : undefined}
+                  aria-label={collapsed ? item.label : undefined}
                   className={({ isActive }) =>
                     clsx(
-                      "flex items-center gap-3 rounded-[var(--radius)] border-l-2 px-3 py-1.5 text-[1.02rem]",
+                      "relative flex items-center gap-3 rounded-[var(--radius)] border-l-2 py-1.5 text-[1.02rem]",
+                      collapsed ? "justify-center px-0 py-2" : "px-3",
                       isActive
                         ? "border-gold bg-accent-soft font-semibold text-accent-strong"
                         : "border-transparent text-ink-muted hover:bg-surface-2 hover:text-ink",
                     )
                   }
                 >
-                  <item.icon className="size-4" aria-hidden />
-                  {item.label}
-                  {item.to === "/messages" && <CountBadge count={unread.messages} label="unread messages" />}
+                  <item.icon className={collapsed ? "size-5" : "size-4"} aria-hidden />
+                  {!collapsed && item.label}
+                  {item.to === "/messages" &&
+                    (collapsed ? (
+                      unread.messages > 0 && <span className="absolute right-2 top-1.5 size-2 rounded-full bg-highlight" aria-hidden />
+                    ) : (
+                      <CountBadge count={unread.messages} label="unread messages" />
+                    ))}
                 </NavLink>
               </li>
             ))}
           </ul>
         </nav>
-        <div className="px-3 pb-3">
-          <InstallAppButton variant="ghost" className="w-full justify-start text-ink-muted" />
+        <div className={clsx("pb-3", collapsed ? "px-2" : "px-3")}>
+          <InstallAppButton variant="ghost" iconOnly={collapsed} className={clsx("w-full text-ink-muted", !collapsed && "justify-start")} />
         </div>
-        <div className="border-t border-line p-3">
-          <div className="flex items-center gap-2 px-2 py-2">
+        <div className={clsx("border-t border-line", collapsed ? "p-2" : "p-3")}>
+          <div className={clsx("flex items-center gap-2 py-2", collapsed ? "flex-col px-0" : "px-2")}>
             <Avatar member={member} />
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium">{member?.displayName}</p>
-              {session?.user.username && <p className="truncate text-xs text-ink-muted">@{session.user.username}</p>}
-            </div>
+            {!collapsed && (
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium">{member?.displayName}</p>
+                {session?.user.username && <p className="truncate text-xs text-ink-muted">@{session.user.username}</p>}
+              </div>
+            )}
             <button
               type="button"
               aria-label="Sign out"
@@ -148,7 +194,18 @@ export function AppShell() {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 flex items-center justify-between gap-2 border-b border-line bg-paper/90 px-4 py-2.5 backdrop-blur md:justify-end">
+        <header className="sticky top-0 z-30 flex items-center justify-between gap-2 border-b border-line bg-paper/90 px-4 py-2.5 backdrop-blur">
+          <button
+            type="button"
+            onClick={toggleSidebar}
+            aria-controls="sidebar"
+            aria-expanded={!collapsed}
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            className="hidden rounded-full p-2 text-ink-muted hover:bg-surface-2 hover:text-ink md:inline-flex"
+          >
+            {collapsed ? <PanelLeftOpen className="size-5" aria-hidden /> : <PanelLeftClose className="size-5" aria-hidden />}
+          </button>
           <NavLink to="/" className="flex items-center md:hidden">
             <Logo variant="horizontal" className="h-9 w-auto" />
           </NavLink>
