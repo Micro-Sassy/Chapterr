@@ -1,3 +1,4 @@
+import type { ClubRole } from "../shared/constants";
 import type { AuthSessionData } from "./auth/auth";
 
 /** All Worker bindings: wrangler.jsonc vars + secrets set with `wrangler secret put`. */
@@ -16,6 +17,22 @@ export interface Env extends Omit<CloudflareBindings, SecretKeys> {
   GOOGLE_BOOKS_API_KEY?: string;
 }
 
+/** A clubs row as loaded by requireClubMember. */
+export interface ClubRecord {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  plan: "beta_free" | "free" | "standard";
+  billingStatus: "active" | "past_due" | "canceled";
+  memberLimit: number;
+  version: number;
+  createdBy: string | null;
+  updatedBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export type AuthedUser = AuthSessionData["user"];
 export type AuthedSession = AuthSessionData["session"];
 
@@ -24,6 +41,9 @@ export interface AppEnv {
   Variables: {
     user: AuthedUser;
     session: AuthedSession;
+    /** Set by requireClubMember on /api/clubs/:clubId/* routes. */
+    club: ClubRecord;
+    membership: { role: ClubRole; joinedAt: string; muted: boolean };
     /** Sanitised request forwarded to Better Auth by the auth guard. */
     authRequest?: Request;
   };

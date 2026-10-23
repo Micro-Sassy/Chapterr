@@ -1,8 +1,9 @@
 {
-  // Teel Ridge Book Club — Cloudflare Workers configuration.
+  // Chapterr — Cloudflare Workers configuration for the app (app.chapterr.io).
+  // The marketing site is a separate Worker: site/wrangler.jsonc.
   // See README.md ("Cloudflare production setup") for where each placeholder comes from.
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "bookclub-teelridge",
+  "name": "chapterr-app",
   "main": "./worker/index.ts",
   "compatibility_date": "2026-08-15",
   // Better Auth relies on AsyncLocalStorage, which is provided by nodejs_compat.
@@ -31,8 +32,8 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "teel-ridge-book-club",
-      "database_id": "48f8b1b9-d3bc-4cf0-8fa4-6817e5d470f1",
+      "database_name": "chapterr",
+      "database_id": "REPLACE_WITH_D1_ID",
       "migrations_dir": "migrations"
     }
   ],
@@ -50,15 +51,16 @@
   // and must never be committed.
   "vars": {
     "APP_ENV": "production",
-    "APP_NAME": "Teel Ridge Book Club",
+    "APP_NAME": "Chapterr",
     // Your public HTTPS origin, e.g. https://books.example.com (no trailing slash).
-    "PUBLIC_APP_URL": "https://bookclub.teelridge.com",
+    "PUBLIC_APP_URL": "https://app.chapterr.io",
+    "MARKETING_URL": "https://chapterr.io",
     // "resend" in production. "console" logs emails instead of sending them (development only).
     "EMAIL_PROVIDER": "resend",
-    // A sender on a domain you verified in Resend, e.g. "Teel Ridge Book Club <books@example.com>".
-    "EMAIL_FROM": "Teel Ridge Book Club <books@mail.teelridge.com>",
+    // A sender on a domain you verified in Resend, e.g. "Chapterr <hello@mail.chapterr.io>".
+    "EMAIL_FROM": "Chapterr <hello@mail.chapterr.io>",
     // Turnstile site keys are public by design; the matching secret is a Wrangler secret.
-    "TURNSTILE_SITE_KEY": "0x4AAAAAAFEuP9s8UvjnccDG",
+    "TURNSTILE_SITE_KEY": "REPLACE_WITH_TURNSTILE_SITE_KEY",
     // PBKDF2 iterations for new password hashes (10000–100000). Lower only if
     // sign-ins fail with error 1102 on the Workers Free plan. See README.
     "PASSWORD_HASH_ITERATIONS": "100000"
@@ -68,8 +70,8 @@
   // Cron Triggers are included in the Workers Free plan.
   "triggers": { "crons": ["17 4 * * *"] },
 
-  // The club's address (a Workers Custom Domain; Cloudflare manages its DNS record and certificate).
-  "routes": [{ "pattern": "bookclub.teelridge.com", "custom_domain": true }],
+  // The app's address (a Workers Custom Domain; Cloudflare manages its DNS record and certificate).
+  "routes": [{ "pattern": "app.chapterr.io", "custom_domain": true }],
   // Members use only the custom domain (sign-in is bound to PUBLIC_APP_URL).
   "workers_dev": false
 }

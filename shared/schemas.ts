@@ -3,6 +3,7 @@ import {
   BOOK_FORMATS,
   CLUB_ACTIVITY_KINDS,
   CLUB_BOOK_STATUSES,
+  CLUB_ROLES,
   LIMITS,
   READING_STATUSES,
   RESERVED_USERNAMES,
@@ -299,6 +300,42 @@ export const recommendationUpdateSchema = z.object({
 });
 
 // ---------------------------------------------------------------------------
+// Clubs and membership
+// ---------------------------------------------------------------------------
+
+export const clubCreateSchema = z.object({
+  name: plainText(LIMITS.clubNameMax, LIMITS.clubNameMin),
+  description: z.preprocess(emptyToNull, longText(LIMITS.clubDescriptionMax).nullable()).default(null),
+});
+export type ClubCreateInput = z.input<typeof clubCreateSchema>;
+export const clubUpdateSchema = clubCreateSchema.extend({ expectedVersion: z.number().int().min(1) });
+
+/** Invite codes: 10 unambiguous upper-case letters/digits, accepted case-insensitively. */
+export const inviteCodeSchema = z
+  .string()
+  .trim()
+  .transform((v) => v.toUpperCase().replace(/[^A-Z0-9]/g, ""))
+  .pipe(z.string().length(LIMITS.inviteCodeLength, "That invite code is not valid"));
+
+export const joinClubSchema = z.object({ code: inviteCodeSchema });
+
+export const inviteCreateSchema = z.object({
+  expiresInDays: z.preprocess(emptyToNull, z.coerce.number().int().min(1).max(90).nullable()).default(7),
+  maxUses: z.preprocess(emptyToNull, z.coerce.number().int().min(1).max(500).nullable()).default(null),
+});
+export type InviteCreateInput = z.input<typeof inviteCreateSchema>;
+
+export const memberRoleSchema = z.object({ role: z.enum(CLUB_ROLES).exclude(["owner"]) });
+export const transferOwnershipSchema = z.object({ userId: idSchema, currentPassword: z.string().min(1, "Enter your password") });
+export const deleteClubSchema = z.object({ confirmName: plainText(LIMITS.clubNameMax, 1), currentPassword: z.string().min(1, "Enter your password") });
+
+/** Cursor pagination query parameters. */
+export const pageQuerySchema = z.object({
+  cursor: z.preprocess(emptyToNull, z.string().max(200).nullable()).default(null),
+  limit: z.preprocess(emptyToNull, z.coerce.number().int().min(1).max(LIMITS.pageSizeMax).nullable()).default(null),
+});
+
+// ---------------------------------------------------------------------------
 // Shared club data (optimistic concurrency via expectedVersion)
 // ---------------------------------------------------------------------------
 
@@ -376,6 +413,8 @@ export const shareCreateSchema = z.object({
   resourceType: z.enum(SHARE_RESOURCE_TYPES),
   /** review/quote id; ignored for list types. */
   resourceId: z.preprocess(emptyToNull, idSchema.nullable()).default(null),
+  /** Required for club_list. */
+  clubId: z.preprocess(emptyToNull, idSchema.nullable()).default(null),
   /** Year for club_list / optional filter for reading_list. */
   year: z.preprocess(emptyToNull, yearSchema.nullable()).default(null),
   /** Status filter for reading_list. */

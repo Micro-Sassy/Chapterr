@@ -16,7 +16,7 @@ const vars = {
   // "console" prints emails to the terminal and stores them in the dev outbox
   // (GET /api/dev/outbox?to=you@example.com). Switch to "resend" to send real mail.
   EMAIL_PROVIDER: "console",
-  EMAIL_FROM: "Teel Ridge Book Club <dev@localhost>",
+  EMAIL_FROM: "Chapterr <dev@localhost>",
   RESEND_API_KEY: "",
   // Cloudflare's official Turnstile testing keys: always pass, never use in production.
   TURNSTILE_SITE_KEY: "1x00000000000000000000AA",
