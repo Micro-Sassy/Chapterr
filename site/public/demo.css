@@ -60,10 +60,11 @@
   color-scheme: dark;
 }
 .demo *, .demo *::before, .demo *::after { box-sizing: border-box; }
-.demo p, .demo h1, .demo h2, .demo ul { margin: 0; }
-.demo ul { padding: 0; list-style: none; }
-.demo button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; text-align: left; }
-.demo svg { width: 18px; height: 18px; flex: none; }
+/* Resets use :where() so they never outrank the component rules below. */
+.demo :where(p, h1, h2, ul) { margin: 0; }
+.demo :where(ul) { padding: 0; list-style: none; }
+.demo :where(button) { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; text-align: left; }
+.demo :where(svg) { width: 18px; height: 18px; flex: none; }
 .demo :focus-visible { outline: 2px solid var(--d-ink); outline-offset: 2px; border-radius: 6px; }
 
 /* Status bar */
@@ -113,7 +114,7 @@
 .d-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 0 4px; }
 .d-top > div { min-width: 0; flex: 1; }
 .d-top .d-eyebrow { margin-bottom: 2px; }
-.d-top .d-h1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.d-top .d-h1 { font-size: 21px; }
 .d-top--club { padding-top: 2px; }
 .d-back { margin-left: -8px; }
 .d-icon-btn {
@@ -137,10 +138,10 @@
 }
 .d-club-switch:hover { background: var(--d-surface); }
 .d-club-switch-text { min-width: 0; flex: 1; display: flex; flex-direction: column; }
-.d-club-switch-text strong { font-family: "Fraunces", "Iowan Old Style", Georgia, serif; font-weight: 600; font-size: 17px; line-height: 1.15; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.d-club-switch-text small { font-size: 11px; color: var(--d-muted); }
+.d-club-switch-text strong { font-family: "Fraunces", "Iowan Old Style", Georgia, serif; font-weight: 600; font-size: 16px; line-height: 1.15; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.d-club-switch-text small { font-size: 11px; color: var(--d-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .d-club-switch > svg { color: var(--d-muted); width: 16px; height: 16px; }
-.d-top .d-btn--sm { min-height: 44px; }
+.d-top .d-btn--sm { min-height: 44px; padding: 0 12px; }
 
 /* Club marks (three spines, three tones) */
 .d-club-mark {
@@ -262,9 +263,11 @@
 .d-tabs [role="tab"] span { font-weight: 500; opacity: 0.8; }
 .d-tabs [role="tab"][aria-selected="true"] { background: var(--d-surface); color: var(--d-ink); box-shadow: 0 1px 2px rgba(30, 58, 47, 0.08); }
 .d-books { display: flex; flex-direction: column; gap: 8px; }
-.d-book { display: flex; gap: 10px; align-items: center; background: var(--d-surface); border: 1px solid var(--d-border); border-radius: 18px; padding: 10px 10px 10px 10px; }
+.d-book { display: flex; gap: 10px; align-items: center; background: var(--d-surface); border: 1px solid var(--d-border); border-radius: 18px; padding: 8px 8px 8px 10px; }
+.d-book .d-cover { width: 38px; height: 56px; }
+.d-book .d-btn { min-height: 44px; }
 .d-book-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.d-book-text .d-booktitle { font-size: 14px; }
+.d-book-text .d-booktitle { font-size: 13px; }
 .d-book-text .d-progress { margin-top: 3px; max-width: 120px; }
 .d-done { white-space: nowrap; }
 
@@ -344,7 +347,7 @@
 .d-btn--primary:hover { background: var(--d-primary-hov); border-color: var(--d-primary-hov); }
 .d-btn--secondary { background: var(--d-surface); color: var(--d-ink); border-color: var(--d-border); }
 .d-btn--secondary:hover { border-color: var(--d-muted); }
-.d-btn--sm { min-height: 50px; padding: 0 12px; font-size: 12px; }
+.d-btn--sm { min-height: 50px; padding: 0 10px; font-size: 11px; }
 .d-btn--block { width: 100%; }
 .d-row { display: flex; gap: 8px; }
 .d-row .d-btn { flex: 1; }
