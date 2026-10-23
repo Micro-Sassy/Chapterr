@@ -200,7 +200,7 @@ function SidebarLink({ item, collapsed, trailing }: { item: NavItem; collapsed: 
       aria-label={collapsed ? item.label : undefined}
       className={({ isActive }) =>
         clsx(
-          "relative flex items-center gap-3 rounded-control py-2 text-[15px] transition-colors",
+          "relative flex items-center gap-3 rounded-control py-1.5 text-[14px] transition-colors",
           collapsed ? "justify-center px-0" : "px-3",
           isActive ? "bg-primary font-semibold text-on-primary" : "text-ink-muted hover:bg-surface-2 hover:text-ink",
         )
@@ -257,7 +257,7 @@ export function AppShell() {
         </div>
         <nav aria-label="Main" className={clsx("flex-1 overflow-y-auto overflow-x-hidden", collapsed ? "px-2" : "px-3")}>
           {club.length > 0 && (
-            <ul className="space-y-0.5">
+            <ul className="space-y-px">
               {club.map((item) => (
                 <li key={item.to}>
                   <SidebarLink
@@ -277,7 +277,7 @@ export function AppShell() {
           )}
           {!collapsed && <p className="label mb-1 mt-5 px-3 text-ink-muted">You</p>}
           {collapsed && <div className="my-3 border-t border-line" aria-hidden />}
-          <ul className="space-y-0.5">
+          <ul className="space-y-px">
             {PERSONAL_NAV.map((item) => (
               <li key={item.to}>
                 <SidebarLink item={item} collapsed={collapsed} />
