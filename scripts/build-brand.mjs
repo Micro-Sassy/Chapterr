@@ -82,16 +82,18 @@ writeFileSync(path.join(root, "public", "favicon.svg"), iconRounded);
 
 // --- Open Graph image (1200x630) --------------------------------------------------------
 const lockup = readSvg("logo/horizontal/chapterr-horizontal-color-on-light.svg").toString("utf8");
+// Fonts are embedded from the app's own packages so the render needs no network.
+const fontUrl = (rel) => `url(data:font/woff2;base64,${readFileSync(path.join(root, "node_modules", rel)).toString("base64")}) format("woff2")`;
 const ogHtml = `<!doctype html><html><head><meta charset="utf-8">
-<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500&display=swap" rel="stylesheet">
 <style>
+  @font-face{font-family:Fraunces;font-style:normal;font-weight:100 900;src:${fontUrl("@fontsource-variable/fraunces/files/fraunces-latin-wght-normal.woff2")}}
+  @font-face{font-family:Inter;font-style:normal;font-weight:100 900;src:${fontUrl("@fontsource-variable/inter/files/inter-latin-wght-normal.woff2")}}
   html,body{margin:0;width:1200px;height:630px;background:#F4EEE2;overflow:hidden}
   .wrap{position:relative;width:1200px;height:630px;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;padding:0 96px;box-sizing:border-box;color:#1E3A2F}
   .logo svg{height:96px;width:auto;display:block}
   h1{font-family:Fraunces,Georgia,serif;font-weight:600;font-size:72px;line-height:1.05;letter-spacing:-0.03em;margin:56px 0 20px;font-variation-settings:"opsz" 144}
   h1 em{font-style:normal;color:#B8903F}
-  p{font-family:Inter,system-ui,sans-serif;font-size:28px;line-height:1.4;color:#4B5E55;margin:0;max-width:760px}
+  p{font-family:Inter,system-ui,sans-serif;font-size:28px;line-height:1.4;color:#4B5E55;margin:0;max-width:640px}
   .shelf{position:absolute;right:96px;bottom:0;width:300px;height:400px}
   .spine{position:absolute;bottom:70px;border-radius:8px;background:#1E3A2F}
   .band{position:absolute;left:0;right:0;height:14px;background:#B8903F}
