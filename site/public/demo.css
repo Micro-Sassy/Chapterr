@@ -406,6 +406,7 @@
   transition: opacity 200ms ease, transform 200ms ease;
 }
 .d-toast.is-in { opacity: 1; transform: none; }
+.d-sheet-host:not(:empty) ~ .d-toasts { bottom: auto; top: 40px; }
 
 /* Guided tour */
 .d-tour-host:empty { display: none; }

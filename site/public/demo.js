@@ -590,7 +590,7 @@
         go("dm", { dmWith: id }); break;
       }
       case "calendar": S.calendar[S.club] = true; render({ keepScroll: true }); toast("Added to your calendar."); break;
-      case "copy": S.copied = true; renderSheet(); toast("Link copied."); break;
+      case "copy": { S.copied = true; renderSheet(); toast("Link copied."); var cb = sheetEl.querySelector('[data-act="copy"]'); if (cb) cb.focus({ preventScroll: true }); break; }
       case "theme": S.theme = S.theme === "dark" ? "light" : "dark"; render({ keepScroll: true }); break;
       case "toast": toast(t.getAttribute("data-text")); break;
       case "tour-next": S.tour += 1; tourStep(); break;
@@ -605,10 +605,9 @@
     send(input.value);
   }
   function onKey(e) {
-    if (e.key === "Escape") {
-      if (S.tour > -1) { tourClose(); e.stopPropagation(); }
-      else if (S.sheet) { closeSheet(); e.stopPropagation(); }
-    }
+    if (e.key !== "Escape" || !S) return;
+    if (S.tour > -1) { tourClose(); e.stopPropagation(); }
+    else if (S.sheet) { closeSheet(); e.stopPropagation(); }
   }
 
   /* ---------- Fit the 300px layout into the phone screen ---------- */
@@ -642,7 +641,7 @@
   if (root) {
     root.addEventListener("click", onClick);
     root.addEventListener("submit", onSubmit);
-    root.addEventListener("keydown", onKey);
+    document.addEventListener("keydown", onKey); /* Escape closes a sheet or the tour even if focus left the phone */
     if ("ResizeObserver" in window && root.parentElement) new ResizeObserver(fit).observe(root.parentElement);
     else window.addEventListener("resize", fit);
   }

@@ -205,7 +205,7 @@
     if (tourBtn) tourBtn.addEventListener("click", function () { if (state !== "live") goLive(false); if (demo) demo.tour(); });
     /* The video has `autoplay` so it starts even before this script runs; hold it
        back until the preloader has lifted so nobody misses the first second. */
-    if (video && !reduceMotion) { try { video.pause(); } catch (e) { /* ignore */ } }
+    if (video) { try { video.pause(); } catch (e) { /* ignore */ } }
   }
 
   /* ---------- Preloader (≤ 1.2 s, skippable, off under reduced motion) ---------- */
