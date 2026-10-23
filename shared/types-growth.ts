@@ -146,3 +146,77 @@ export interface ClubIntelligence {
   duplicatePicks: { clubName: string; year: number; status: string }[];
   suggestions: { edition: EditionSummary; reason: string }[];
 }
+
+// ---------------------------------------------------------------------------
+// Additions (W3): account contact details, push preferences, join requests as
+// seen by the requester, invite preview extras, feasibility/bridge extras.
+// ---------------------------------------------------------------------------
+
+/** Phone + SMS opt-in, returned on `Me` next to the existing fields. */
+export interface AccountContact {
+  phone: string | null;
+  smsOptIn: boolean;
+}
+
+/** Wave 2 notification channels, merged into `Me.preferences`. */
+export interface PushPreferences {
+  pushEnabled: boolean;
+  pushMeetingReminders: boolean;
+  pushMentions: boolean;
+  emailMeetingReminders: boolean;
+  smsMeetingReminders: boolean;
+  digestCatchUp: boolean;
+}
+
+/** A join request as seen by the member who made it (`GET /api/clubs/requests`). */
+export interface MyJoinRequest {
+  id: string;
+  club: { id: string; name: string };
+  status: "pending" | "approved" | "declined";
+  createdAt: string;
+  decidedAt: string | null;
+}
+
+/** Extra fields on the invite preview when the club screens new members. */
+export interface InvitePreviewExtras {
+  joinPolicy: JoinPolicy;
+  screeningQuestions: ScreeningQuestion[];
+}
+
+/** Response of `POST /api/clubs/join` when the club requires approval. */
+export interface JoinPending {
+  pending: true;
+  requestId: string;
+  clubName: string;
+}
+
+export interface PushSubscriptionInfo {
+  id: string;
+  endpoint: string;
+  userAgent: string | null;
+  createdAt: string;
+  lastUsedAt: string | null;
+}
+
+/** Payload delivered to the service worker (JSON body of the push message). */
+export interface PushPayload {
+  title: string;
+  body: string;
+  url: string;
+  tag: string;
+}
+
+/** Storage usage for a club (`GET /files/usage`). */
+export interface FileUsage {
+  files: number;
+  bytes: number;
+  filesMax: number;
+  bytesMax: number;
+  perFileMax: number;
+  storage: "r2" | "d1";
+}
+
+/** Extra fields on `ShareLinks`: `copy` is the ready-to-paste text with the link. */
+export interface ShareLinksExtras {
+  copy: string;
+}

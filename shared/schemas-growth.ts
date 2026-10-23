@@ -68,3 +68,40 @@ export const challengeUpdateSchema = challengeSchema.and(z.object({ expectedVers
 export const challengeProgressSchema = z.object({ progress: z.coerce.number().int().min(0).max(100_000) });
 
 export const bridgeSchema = z.object({ kind: z.enum(["meeting", "poll", "assignment"]), id: idSchema });
+
+// ---------------------------------------------------------------------------
+// Additions (W3)
+// ---------------------------------------------------------------------------
+
+/** Non-file fields of the multipart upload (`POST /api/clubs/:id/files`). */
+export const fileUploadFieldsSchema = z.object({
+  kind: fileKindSchema,
+  title: z.preprocess(emptyToNull, plainText(120).nullable()).default(null),
+  meetingId: z.preprocess(emptyToNull, idSchema.nullable()).default(null),
+});
+
+export const filesQuerySchema = z.object({
+  kind: z.preprocess(emptyToNull, fileKindSchema.nullable()).default(null),
+  meetingId: z.preprocess(emptyToNull, idSchema.nullable()).default(null),
+});
+
+export const joinRequestStatusSchema = z.enum(["pending", "approved", "declined"]);
+export const joinRequestsQuerySchema = z.object({ status: z.preprocess(emptyToNull, joinRequestStatusSchema.nullable()).default("pending") });
+
+/** Wave 2 notification channels (all optional so the existing preferences form keeps working). */
+export const pushPreferencesSchema = z.object({
+  pushEnabled: z.boolean().optional(),
+  pushMeetingReminders: z.boolean().optional(),
+  pushMentions: z.boolean().optional(),
+  emailMeetingReminders: z.boolean().optional(),
+  smsMeetingReminders: z.boolean().optional(),
+  digestCatchUp: z.boolean().optional(),
+});
+
+export const monthSchema = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "Use YYYY-MM");
+export const readingLogQuerySchema = z
+  .object({ from: z.preprocess(emptyToNull, dateOnly.nullable()).default(null), to: z.preprocess(emptyToNull, dateOnly.nullable()).default(null) })
+  .refine((q) => !q.from || !q.to || q.from <= q.to, { path: ["to"], message: "End after start" });
+
+export const bridgeShareQuerySchema = bridgeSchema;
+export const intelligenceQuerySchema = z.object({ editionId: z.preprocess(emptyToNull, idSchema.nullable()).default(null) });

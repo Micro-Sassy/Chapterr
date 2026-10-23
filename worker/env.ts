@@ -27,6 +27,18 @@ export interface Env extends Omit<CloudflareBindings, SecretKeys> {
   GOOGLE_BOOKS_API_KEY?: string;
   /** Marketing site origin shown in /api/config (defaults to https://chapterr.io). */
   MARKETING_URL?: string;
+  /** R2 bucket for club files. Optional: without it files are stored inline in D1 (2 MB each). */
+  FILES?: R2Bucket;
+  /** Web Push (VAPID). Public key + subject are vars; the private key is a secret. */
+  VAPID_PUBLIC_KEY?: string;
+  VAPID_SUBJECT?: string;
+  VAPID_PRIVATE_KEY?: string;
+  /** Claude Messages API key (discussion guide generation). Secret. */
+  ANTHROPIC_API_KEY?: string;
+  /** Twilio SMS adapter (meeting reminders). Secrets; all three enable the adapter. */
+  TWILIO_ACCOUNT_SID?: string;
+  TWILIO_AUTH_TOKEN?: string;
+  TWILIO_FROM?: string;
 }
 
 /** A clubs row as loaded by requireClubMember. */
