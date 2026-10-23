@@ -1,0 +1,22 @@
+{
+  // Chapterr marketing site (chapterr.io) — an assets-only Worker.
+  // There is no "main": Cloudflare serves ./public directly, with the
+  // security headers in public/_headers. The app lives in the Worker
+  // configured by ../wrangler.jsonc (app.chapterr.io).
+  //
+  //   Preview: npx wrangler dev -c site/wrangler.jsonc
+  //   Deploy:  npx wrangler deploy -c site/wrangler.jsonc
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "chapterr-site",
+  "compatibility_date": "2026-08-15",
+  "assets": {
+    "directory": "./public",
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "404-page"
+  },
+  "routes": [
+    { "pattern": "chapterr.io", "custom_domain": true },
+    { "pattern": "www.chapterr.io", "custom_domain": true }
+  ],
+  "workers_dev": false
+}
