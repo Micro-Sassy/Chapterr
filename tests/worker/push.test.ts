@@ -212,9 +212,13 @@ describe("push subscriptions", () => {
     const sms = await testEnv.DB.prepare("SELECT subject, text_body FROM dev_outbox WHERE to_address = ? ORDER BY created_at DESC LIMIT 1").bind("+15555550100").first<any>();
     expect(sms?.subject).toBe("SMS");
     expect(sms?.text_body).toBe("Push Club: Meeting in 2 hours The library, 7pm");
-    // The reminder email respects email_meeting_reminders (on by default).
+    // Email is opt-in per call (the reminder cron sends its own), so no email went out here.
     const mail = await testEnv.DB.prepare("SELECT subject FROM dev_outbox WHERE to_address = ? ORDER BY created_at DESC LIMIT 1").bind(bob.email.toLowerCase()).first<any>();
-    expect(mail?.subject).toContain("Meeting in 2 hours");
+    expect(mail?.subject ?? "").not.toContain("Meeting in 2 hours");
+    // Opting in sends the clubUpdateEmail layout gated by email_meeting_reminders.
+    await notifyUsers(testEnv, [bob.id], { kind: "meeting_reminder", clubId: club.id, title: "Meeting in 1 hour", actorId: alice.id, channels: { email: true, sms: false } });
+    const mail2 = await testEnv.DB.prepare("SELECT subject FROM dev_outbox WHERE to_address = ? ORDER BY created_at DESC LIMIT 1").bind(bob.email.toLowerCase()).first<any>();
+    expect(mail2?.subject).toContain("Meeting in 1 hour");
     // Other kinds never text.
     await notifyUsers(testEnv, [bob.id], { kind: "poll_opened", clubId: club.id, title: "Not a text", actorId: alice.id });
     const count = await testEnv.DB.prepare("SELECT COUNT(*) AS n FROM dev_outbox WHERE to_address = ?").bind("+15555550100").first<any>();

@@ -44,7 +44,7 @@ export interface NotifyChannels {
   push?: boolean;
   /** SMS to opted-in members. Default: on for `meeting_reminder` only. */
   sms?: boolean;
-  /** Email (pref `email_meeting_reminders`). Default: on for `meeting_reminder` only. */
+  /** Email (pref `email_meeting_reminders`, clubUpdateEmail layout). Default: off; W1's reminder cron sends its own email. */
   email?: boolean;
 }
 
@@ -90,7 +90,7 @@ async function fanOut(env: Env, recipients: string[], input: NotifyInput, clubNa
   const channels: Required<NotifyChannels> = {
     push: input.channels?.push ?? true,
     sms: input.channels?.sms ?? input.kind === "meeting_reminder",
-    email: input.channels?.email ?? input.kind === "meeting_reminder",
+    email: input.channels?.email ?? false,
   };
   if (!channels.push && !channels.sms && !channels.email) return;
   let rows: ChannelPrefRow[];
