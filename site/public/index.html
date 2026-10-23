@@ -123,13 +123,16 @@
         <div class="hero-stage">
           <div class="stage" id="stage" data-state="idle">
             <img class="stage-book" src="/3d/book.webp" srcset="/3d/book-700.webp 700w, /3d/book.webp 1400w" sizes="(max-width: 640px) 90vw, 560px" width="1400" height="1400" alt="A closed green hardback with a brass title band, standing upright." fetchpriority="high" decoding="async">
-            <video class="stage-video" id="stage-video" muted playsinline preload="metadata" poster="/3d/book-to-phone-poster.webp" aria-hidden="true" tabindex="-1" disablepictureinpicture>
+            <video class="stage-video" id="stage-video" autoplay muted playsinline preload="metadata" poster="/3d/book-to-phone-poster.webp" aria-hidden="true" tabindex="-1" disablepictureinpicture>
               <source src="/3d/book-to-phone.webm" type="video/webm">
               <source src="/3d/book-to-phone.mp4" type="video/mp4">
             </video>
-            <div class="phone" id="phone" aria-hidden="true">
-              <div class="phone-screen" id="phone-screen">
-                <div class="demo" id="demo" role="application" aria-label="Interactive demo of the Chapterr app. Nothing you do here is saved. Use Tab to move between controls."></div>
+            <img class="stage-last" id="stage-last" src="/3d/book-to-phone-last.webp" width="1080" height="1080" alt="" aria-hidden="true" loading="lazy" decoding="async">
+            <div class="phone-wrap">
+              <div class="phone" id="phone" aria-hidden="true">
+                <div class="phone-screen" id="phone-screen">
+                  <div class="demo" id="demo" role="application" aria-label="Interactive demo of the Chapterr app. Nothing you do here is saved. Use Tab to move between controls."></div>
+                </div>
               </div>
             </div>
           </div>
@@ -491,7 +494,7 @@
   <footer class="site-footer">
     <div class="container footer-row">
       <a class="footer-brand" href="/" aria-label="Chapterr home">
-        <img src="/brand/wordmark-color-on-dark.svg" alt="Chapterr" width="120" height="26">
+        <img src="/brand/wordmark-color-on-dark.svg" alt="Chapterr" width="80" height="26">
       </a>
       <nav class="footer-links" aria-label="Footer">
         <a href="https://app.chapterr.io/sign-in">Sign in</a>

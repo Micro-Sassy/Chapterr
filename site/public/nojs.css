@@ -1,0 +1,4 @@
+/* Loaded only when scripting is off: the page is complete as a static page. */
+.preloader { display: none; }
+.stage-video, .stage-last, .phone-wrap, .stage-caption { display: none; }
+.reveal { opacity: 1; transform: none; }

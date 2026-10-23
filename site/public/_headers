@@ -1,6 +1,7 @@
 # Security and caching headers for the Chapterr marketing site
-# (Cloudflare Workers Static Assets). No inline scripts are used; all
-# JavaScript lives in /site.js. Fonts come from Google Fonts only.
+# (Cloudflare Workers Static Assets). No inline scripts or style attributes
+# are used; all JavaScript lives in /site.js and /demo.js, all CSS in
+# /styles.css, /demo.css and /nojs.css. Fonts come from Google Fonts only.
 /*
   Strict-Transport-Security: max-age=63072000; includeSubDomains
   X-Content-Type-Options: nosniff
@@ -8,13 +9,16 @@
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()
   Cross-Origin-Opener-Policy: same-origin
-  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; media-src 'self'; connect-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests
 
 /brand/*
   Cache-Control: public, max-age=604800, stale-while-revalidate=86400
 
 /icons/*
   Cache-Control: public, max-age=604800, stale-while-revalidate=86400
+
+/3d/*
+  Cache-Control: public, max-age=2592000, stale-while-revalidate=86400
 
 /favicon.svg
   Cache-Control: public, max-age=604800
@@ -28,5 +32,14 @@
 /styles.css
   Cache-Control: public, max-age=3600, stale-while-revalidate=86400
 
+/demo.css
+  Cache-Control: public, max-age=3600, stale-while-revalidate=86400
+
+/nojs.css
+  Cache-Control: public, max-age=3600, stale-while-revalidate=86400
+
 /site.js
+  Cache-Control: public, max-age=3600, stale-while-revalidate=86400
+
+/demo.js
   Cache-Control: public, max-age=3600, stale-while-revalidate=86400

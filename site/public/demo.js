@@ -558,7 +558,7 @@
       case "go": go(t.getAttribute("data-view")); break;
       case "tab": tab(t.getAttribute("data-view")); break;
       case "back": back(); break;
-      case "open-club": S.club = t.getAttribute("data-club"); S.unread[S.club] = S.unread[S.club] && S.club !== "office" ? S.unread[S.club] : S.unread[S.club]; tab("club"); break;
+      case "open-club": S.club = t.getAttribute("data-club"); tab("club"); break;
       case "switch":
         S.club = t.getAttribute("data-club"); closeSheet();
         if (S.view === "member" || S.view === "dm") S.view = "club";
@@ -702,5 +702,5 @@
   }
   initStrip();
 
-  window.ChapterrDemo = { boot: boot, fit: fit, tour: function () { if (!S) boot(); tourStart(); } };
+  window.ChapterrDemo = { boot: boot, fit: fit, isBooted: function () { return !!S; }, tour: function () { if (!S) boot(); tourStart(); } };
 })();
