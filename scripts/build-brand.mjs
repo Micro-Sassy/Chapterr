@@ -101,7 +101,7 @@ const ogHtml = `<!doctype html><html><head><meta charset="utf-8">
 </style></head><body><div class="wrap">
   <div class="logo">${lockup}</div>
   <h1>Your club, <em>one shelf</em></h1>
-  <p>The shelf, the schedule, the conversation — for every book club you're in.</p>
+  <p>The shelf, the schedule, the conversation, for every book club you're in.</p>
   <div class="shelf" aria-hidden="true">
     <div class="spine" style="left:20px;width:52px;height:150px"><div class="band" style="top:30px"></div></div>
     <div class="spine" style="left:92px;width:52px;height:200px;background:#2A4D3F"><div class="band" style="top:36px"></div></div>

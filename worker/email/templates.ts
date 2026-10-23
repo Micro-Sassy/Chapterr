@@ -51,7 +51,7 @@ ${
 ${escapeHtml(footnote)}
 </td></tr>
 </table>
-<p style="max-width:540px;margin:16px auto 0 auto;font-size:12px;line-height:1.5;color:${BRAND.moss};font-family:${SANS};text-align:center;">${BRAND.name} — your club, one shelf.</p>
+<p style="max-width:540px;margin:16px auto 0 auto;font-size:12px;line-height:1.5;color:${BRAND.moss};font-family:${SANS};text-align:center;">${BRAND.name}: your club, one shelf.</p>
 </td></tr>
 </table>
 </body></html>`;
@@ -79,7 +79,7 @@ export function verificationEmail(to: string, name: string, url: string): EmailM
     action: { label: "Confirm email", url },
     footnote: "If you did not create an account, you can ignore this email. No account is activated without confirmation.",
   });
-  return { to, subject: `Confirm your email — ${BRAND.name}`, html, text };
+  return { to, subject: `Confirm your email · ${BRAND.name}`, html, text };
 }
 
 export function changeEmailVerification(to: string, name: string, url: string): EmailMessage {
@@ -94,7 +94,7 @@ export function changeEmailVerification(to: string, name: string, url: string): 
     action: { label: "Confirm new email", url },
     footnote: "If you did not request this change, ignore this email and your address will stay the same.",
   });
-  return { to, subject: `Confirm your new email — ${BRAND.name}`, html, text };
+  return { to, subject: `Confirm your new email · ${BRAND.name}`, html, text };
 }
 
 export function passwordResetEmail(to: string, name: string, url: string): EmailMessage {
@@ -109,7 +109,7 @@ export function passwordResetEmail(to: string, name: string, url: string): Email
     action: { label: "Choose a new password", url },
     footnote: "If you did not ask for this, you can ignore this email. Your password will not change.",
   });
-  return { to, subject: `Reset your password — ${BRAND.name}`, html, text };
+  return { to, subject: `Reset your password · ${BRAND.name}`, html, text };
 }
 
 export function passwordChangedEmail(to: string, name: string): EmailMessage {
@@ -123,7 +123,7 @@ export function passwordChangedEmail(to: string, name: string): EmailMessage {
     ],
     footnote: "This is an automated security notice.",
   });
-  return { to, subject: `Your password was changed — ${BRAND.name}`, html, text };
+  return { to, subject: `Your password was changed · ${BRAND.name}`, html, text };
 }
 
 /** A club update (new meeting, assignment, recommendation). Names the club in the subject and the button. */
@@ -135,5 +135,5 @@ export function clubUpdateEmail(to: string, name: string, clubName: string, head
     action: { label: `Open ${clubName}`, url },
     footnote: `You are receiving this because club update emails are turned on in your ${BRAND.name} notification settings.`,
   });
-  return { to, subject: `${clubName}: ${heading} — ${BRAND.name}`, html, text };
+  return { to, subject: `${clubName}: ${heading} · ${BRAND.name}`, html, text };
 }

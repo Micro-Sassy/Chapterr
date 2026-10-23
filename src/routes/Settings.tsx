@@ -492,7 +492,7 @@ function ImportTab() {
       setResult(total);
       void qc.invalidateQueries();
     } catch (err) {
-      setRunError(`${errorMessage(err)} You can safely run the import again — books already imported are updated, not duplicated.`);
+      setRunError(`${errorMessage(err)} You can safely run the import again. Books already imported are updated, not duplicated.`);
     } finally {
       setProgress(null);
     }

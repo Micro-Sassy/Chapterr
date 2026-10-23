@@ -1,4 +1,4 @@
-/* Chapterr marketing site — page chrome: preloader, nav, reveal, parallax,
+/* Chapterr marketing site: page chrome: preloader, nav, reveal, parallax,
    and the hero's book→phone handoff. Progressive: the page is complete
    without it (static book render + content). */
 (function () {

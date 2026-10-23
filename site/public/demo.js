@@ -1,4 +1,4 @@
-/* Chapterr marketing site — the interactive demo that runs inside the hero
+/* Chapterr marketing site: the interactive demo that runs inside the hero
    phone, plus the "switch club" strip further down the page. Vanilla JS,
    no framework, state in memory only. Nothing here talks to a server. */
 (function () {
@@ -108,7 +108,7 @@
 
   var REPLIES = [
     "Chapter 3 by Thursday?",
-    "Loved the ending — no spoilers in here.",
+    "Loved the ending. No spoilers in here.",
     "Who’s bringing the snacks?",
     "Anyone else reading on the train?",
     "I’ll post the page numbers tonight."
