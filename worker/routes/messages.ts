@@ -147,7 +147,7 @@ conversationRoutes.get("/", async (c) => {
       id: String(r.id),
       clubId: String(r.club_id),
       kind: r.kind as Conversation["kind"],
-      title: r.kind === "club" ? "Club conversation" : (other?.displayName ?? "Former member"),
+      title: r.kind === "club" ? c.get("club").name : (other?.displayName ?? "Former member"),
       otherMember: other,
       lastMessageAt: (r.last_message_at as string | null) ?? null,
       lastMessagePreview: (r.preview as string | null) ?? null,
@@ -209,7 +209,7 @@ conversationRoutes.get("/:id", async (c) => {
     id: conv.id,
     clubId,
     kind: conv.kind,
-    title: conv.kind === "club" ? "Club conversation" : (other?.displayName ?? "Former member"),
+    title: conv.kind === "club" ? c.get("club").name : (other?.displayName ?? "Former member"),
     otherMember: other,
   });
 });
