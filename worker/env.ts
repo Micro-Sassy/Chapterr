@@ -15,6 +15,8 @@ export interface Env extends Omit<CloudflareBindings, SecretKeys> {
   TURNSTILE_SECRET_KEY: string;
   /** Optional Google Books API key. Secret. Without it Open Library is used. */
   GOOGLE_BOOKS_API_KEY?: string;
+  /** Marketing site origin shown in /api/config (defaults to https://chapterr.io). */
+  MARKETING_URL?: string;
 }
 
 /** A clubs row as loaded by requireClubMember. */

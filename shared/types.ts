@@ -99,6 +99,9 @@ export interface Genre {
   version: number;
   archivedAt: string | null;
   bookCount?: number;
+  /** Set when genres from several clubs are mixed (book detail page). */
+  clubId?: string;
+  clubName?: string;
 }
 
 export interface EditionSummary {
@@ -399,6 +402,15 @@ export interface HomeData {
   personalGoal: GoalProgress;
   currentlyReading: UserBook[];
   unreadNotifications: number;
+}
+
+/** Billing summary for a club (stub while every club is free). */
+export interface ClubBilling {
+  plan: ClubPlan;
+  billingStatus: Club["billingStatus"];
+  priceCents: number;
+  billingEnabled: boolean;
+  message: string;
 }
 
 /** One club's dashboard. */

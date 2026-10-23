@@ -19,18 +19,23 @@ export async function updateVersioned<T>(opts: {
   userId: string;
   load: () => Promise<T | null>;
   label: string;
+  /** Extra equality conditions, e.g. `{ club_id: clubId }` so a record can only be changed inside its own club. */
+  where?: Record<string, Param>;
 }): Promise<T> {
   const cols = Object.keys(opts.set);
   const assignments = cols.map((c) => `${c} = ?`).join(", ");
+  const extraCols = Object.keys(opts.where ?? {});
+  const extra = extraCols.map((c) => ` AND ${c} = ?`).join("");
   const res = await run(
     opts.db,
     `UPDATE ${opts.table} SET ${assignments}${cols.length ? ", " : ""}version = version + 1, updated_by = ?, updated_at = ?
-     WHERE id = ? AND version = ?`,
+     WHERE id = ? AND version = ?${extra}`,
     ...cols.map((c) => opts.set[c]!),
     opts.userId,
     nowIso(),
     opts.id,
     opts.expectedVersion,
+    ...extraCols.map((c) => opts.where![c]!),
   );
   const current = await opts.load();
   if (res.meta.changes === 0) {

@@ -33,7 +33,7 @@
     {
       "binding": "DB",
       "database_name": "chapterr",
-      "database_id": "REPLACE_WITH_D1_ID",
+      "database_id": "868ce8f3-a7c5-42ec-a14b-9178b7376d50",
       "migrations_dir": "migrations"
     }
   ],
@@ -60,7 +60,7 @@
     // A sender on a domain you verified in Resend, e.g. "Chapterr <hello@mail.chapterr.io>".
     "EMAIL_FROM": "Chapterr <hello@mail.chapterr.io>",
     // Turnstile site keys are public by design; the matching secret is a Wrangler secret.
-    "TURNSTILE_SITE_KEY": "REPLACE_WITH_TURNSTILE_SITE_KEY",
+    "TURNSTILE_SITE_KEY": "0x4AAAAAAFh_VJmuejJdtAKq",
     // PBKDF2 iterations for new password hashes (10000–100000). Lower only if
     // sign-ins fail with error 1102 on the Workers Free plan. See README.
     "PASSWORD_HASH_ITERATIONS": "100000"

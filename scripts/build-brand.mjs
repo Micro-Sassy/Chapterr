@@ -1,130 +1,141 @@
-// Build web-ready brand assets from the club's original logo files in brand/source/.
-// Produces transparent logos in the brand ink (green) and a cream variant for dark
-// mode, a cropped book mark, and all PWA/app icons.
-// Usage: npm run brand
-import { mkdir } from "node:fs/promises";
+// Renders the Chapterr brand files (brand/chapterr/**, supplied as outlined SVG)
+// into everything the app, the marketing site and emails reference:
+//   public/brand/chapterr/*.svg + *.png   logo lockups (horizontal, vertical, mark, wordmark)
+//   public/icons/*.png                    PWA icons (any + maskable), Apple touch icon
+//   public/favicon.{svg,png}
+//   public/brand/chapterr/og-image.png    1200x630 social card (rendered with Playwright so the
+//                                         real Fraunces/Inter fonts are used)
+//   site/public/...                       the same files for chapterr.io
+// Usage: node scripts/build-brand.mjs
+import { chromium } from "@playwright/test";
+import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
 import sharp from "sharp";
 
-const SRC = "brand/source";
-const OUT = "public/brand";
-const ICONS = "public/icons";
-const GREEN = { r: 0x21, g: 0x3a, b: 0x2f }; // logo ink
-const CREAM = { r: 0xf1, g: 0xe6, b: 0xcc }; // parchment
-const PAPER = { r: 0xf3, g: 0xea, b: 0xd6 };
+const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
+const src = path.join(root, "brand", "chapterr");
+const outBrand = path.join(root, "public", "brand", "chapterr");
+const outIcons = path.join(root, "public", "icons");
+const siteBrand = path.join(root, "site", "public", "brand");
+const siteIcons = path.join(root, "site", "public", "icons");
+for (const d of [outBrand, outIcons, siteBrand, siteIcons]) mkdirSync(d, { recursive: true });
 
-await mkdir(OUT, { recursive: true });
-await mkdir(ICONS, { recursive: true });
+const FOREST = { r: 0x1e, g: 0x3a, b: 0x2f, alpha: 1 };
+const LINEN = { r: 0xf4, g: 0xee, b: 0xe2, alpha: 1 };
 
-/** Return {width,height,mask} where mask is an 8-bit ink coverage map. */
-async function inkMask(file) {
-  const img = sharp(file);
-  const meta = await img.metadata();
-  const { data, info } = await img.ensureAlpha().raw().toBuffer({ resolveWithObject: true });
-  const mask = Buffer.alloc(info.width * info.height);
-  for (let i = 0, p = 0; i < data.length; i += 4, p++) {
-    const a = data[i + 3] / 255;
-    const lum = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
-    // Dark ink on light paper -> opaque; light paper -> transparent. Soft edges preserved.
-    const ink = meta.hasAlpha && a < 0.999 ? a : Math.min(1, Math.max(0, (225 - lum) / (225 - 70)));
-    mask[p] = Math.round(ink * 255);
+const VARIANTS = ["color-on-light", "color-on-dark", "mono-forest", "mono-linen", "mono-black", "mono-white"];
+const LOCKUPS = [
+  ["horizontal", 1600],
+  ["vertical", 1000],
+  ["mark", 512],
+  ["wordmark", 1400],
+];
+
+function readSvg(rel) {
+  const p = path.join(src, rel);
+  if (!existsSync(p)) throw new Error(`Missing brand file ${rel}`);
+  return readFileSync(p);
+}
+
+async function png(svg, width, file, opts = {}) {
+  let img = sharp(svg, { density: 384 }).resize({ width, withoutEnlargement: false });
+  if (opts.flatten) img = img.flatten({ background: opts.flatten });
+  await img.png({ compressionLevel: 9, palette: opts.palette ?? true, quality: 92, effort: 10 }).toFile(file);
+  console.log("wrote", path.relative(root, file));
+}
+
+// --- Logo lockups: copy SVGs and render PNGs ----------------------------------------
+for (const [kind, width] of LOCKUPS) {
+  for (const v of VARIANTS) {
+    const name = `chapterr-${kind}-${v}.svg`;
+    const svg = readSvg(path.join("logo", kind, name));
+    const base = `${kind === "mark" ? "mark" : kind === "wordmark" ? "wordmark" : `logo-${kind}`}-${v}`;
+    writeFileSync(path.join(outBrand, `${base}.svg`), svg);
+    await png(svg, width, path.join(outBrand, `${base}.png`));
   }
-  return { width: info.width, height: info.height, mask };
 }
 
-function colorize({ width, height, mask }, color) {
-  const out = Buffer.alloc(width * height * 4);
-  for (let p = 0; p < mask.length; p++) {
-    out[p * 4] = color.r;
-    out[p * 4 + 1] = color.g;
-    out[p * 4 + 2] = color.b;
-    out[p * 4 + 3] = mask[p];
-  }
-  return sharp(out, { raw: { width, height, channels: 4 } });
+// --- Watermark (12% opacity baked in) ------------------------------------------------
+for (const tone of ["forest", "linen"]) {
+  const svg = readSvg(path.join("watermark", `chapterr-watermark-mark-${tone}.svg`));
+  writeFileSync(path.join(outBrand, `watermark-mark-${tone}.svg`), svg);
 }
 
-/** Bounding box of ink, optionally limited to rows [y0, y1). */
-function bbox({ width, height, mask }, y0 = 0, y1 = height, threshold = 40) {
-  let minX = width, minY = height, maxX = -1, maxY = -1;
-  for (let y = y0; y < y1; y++)
-    for (let x = 0; x < width; x++)
-      if (mask[y * width + x] > threshold) {
-        if (x < minX) minX = x;
-        if (x > maxX) maxX = x;
-        if (y < minY) minY = y;
-        if (y > maxY) maxY = y;
-      }
-  return { left: minX, top: minY, width: maxX - minX + 1, height: maxY - minY + 1 };
+// --- App icons -------------------------------------------------------------------------
+const iconSquare = readSvg("app-icon/chapterr-app-icon-square.svg");
+const iconRounded = readSvg("app-icon/chapterr-app-icon-rounded.svg");
+const iconLight = readSvg("app-icon/chapterr-app-icon-light-rounded.svg");
+const avatar = readSvg("app-icon/chapterr-avatar-circle.svg");
+writeFileSync(path.join(outBrand, "app-icon-rounded.svg"), iconRounded);
+writeFileSync(path.join(outBrand, "app-icon-square.svg"), iconSquare);
+writeFileSync(path.join(outBrand, "avatar-circle.svg"), avatar);
+// "any" purpose icons: rounded (platforms that do not mask). Maskable: square (the OS masks it;
+// the mark sits at 70% width, inside the 80% safe zone).
+for (const size of [192, 512]) {
+  await png(iconRounded, size, path.join(outIcons, `icon-${size}.png`), { palette: false });
+  await png(iconSquare, size, path.join(outIcons, `maskable-${size}.png`), { palette: false, flatten: FOREST });
 }
+await png(iconSquare, 180, path.join(outIcons, "apple-touch-icon.png"), { palette: false, flatten: FOREST });
+await png(iconLight, 512, path.join(outIcons, "icon-light-512.png"), { palette: false });
+await png(iconRounded, 64, path.join(root, "public", "favicon.png"), { palette: false });
+writeFileSync(path.join(root, "public", "favicon.svg"), iconRounded);
 
-function crop(m, box, pad = 0) {
-  const left = Math.max(0, box.left - pad), top = Math.max(0, box.top - pad);
-  const w = Math.min(m.width - left, box.width + pad * 2), h = Math.min(m.height - top, box.height + pad * 2);
-  const mask = Buffer.alloc(w * h);
-  for (let y = 0; y < h; y++) m.mask.copy(mask, y * w, (top + y) * m.width + left, (top + y) * m.width + left + w);
-  return { width: w, height: h, mask };
+// --- Open Graph image (1200x630) --------------------------------------------------------
+const lockup = readSvg("logo/horizontal/chapterr-horizontal-color-on-light.svg").toString("utf8");
+const ogHtml = `<!doctype html><html><head><meta charset="utf-8">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  html,body{margin:0;width:1200px;height:630px;background:#F4EEE2;overflow:hidden}
+  .wrap{position:relative;width:1200px;height:630px;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;padding:0 96px;box-sizing:border-box;color:#1E3A2F}
+  .logo svg{height:96px;width:auto;display:block}
+  h1{font-family:Fraunces,Georgia,serif;font-weight:600;font-size:72px;line-height:1.05;letter-spacing:-0.03em;margin:56px 0 20px;font-variation-settings:"opsz" 144}
+  h1 em{font-style:normal;color:#B8903F}
+  p{font-family:Inter,system-ui,sans-serif;font-size:28px;line-height:1.4;color:#4B5E55;margin:0;max-width:760px}
+  .shelf{position:absolute;right:96px;bottom:0;width:300px;height:400px}
+  .spine{position:absolute;bottom:70px;border-radius:8px;background:#1E3A2F}
+  .band{position:absolute;left:0;right:0;height:14px;background:#B8903F}
+  .rail{position:absolute;left:0;right:0;bottom:56px;height:14px;border-radius:6px;background:#B8903F}
+</style></head><body><div class="wrap">
+  <div class="logo">${lockup}</div>
+  <h1>Your club, <em>one shelf</em></h1>
+  <p>The shelf, the schedule, the conversation — for every book club you're in.</p>
+  <div class="shelf" aria-hidden="true">
+    <div class="spine" style="left:20px;width:52px;height:150px"><div class="band" style="top:30px"></div></div>
+    <div class="spine" style="left:92px;width:52px;height:200px;background:#2A4D3F"><div class="band" style="top:36px"></div></div>
+    <div class="spine" style="left:184px;width:52px;height:230px;transform:rotate(14deg);transform-origin:bottom left;background:#142A22"><div class="band" style="top:36px"></div></div>
+    <div class="rail"></div>
+  </div>
+</div></body></html>`;
+const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || "/opt/pw-browsers/chromium" });
+const page = await browser.newPage({ viewport: { width: 1200, height: 630 }, deviceScaleFactor: 1 });
+await page.setContent(ogHtml, { waitUntil: "networkidle" });
+await page.evaluate(() => document.fonts.ready);
+const ogPath = path.join(outBrand, "og-image.png");
+await page.screenshot({ path: ogPath, type: "png" });
+await browser.close();
+console.log("wrote", path.relative(root, ogPath));
+
+// --- Marketing site copies --------------------------------------------------------------
+for (const f of [
+  "logo-horizontal-color-on-light.svg",
+  "logo-horizontal-color-on-dark.svg",
+  "logo-horizontal-color-on-light.png",
+  "logo-vertical-color-on-light.svg",
+  "logo-vertical-color-on-dark.svg",
+  "mark-color-on-light.svg",
+  "mark-color-on-dark.svg",
+  "wordmark-color-on-light.svg",
+  "wordmark-color-on-dark.svg",
+  "watermark-mark-forest.svg",
+  "watermark-mark-linen.svg",
+  "app-icon-rounded.svg",
+]) {
+  cpSync(path.join(outBrand, f), path.join(siteBrand, f));
 }
-
-/**
- * Split the stacked logo into horizontal ink bands (ridge, book, "Teel Ridge",
- * "BOOK CLUB"). The widest band is the wordmark; the mark is everything above it.
- */
-function markRows(m) {
-  const bands = [];
-  let start = -1;
-  for (let y = 0; y <= m.height; y++) {
-    let ink = false;
-    if (y < m.height) for (let x = 0; x < m.width; x++) if (m.mask[y * m.width + x] > 40) { ink = true; break; }
-    if (ink && start < 0) start = y;
-    if (!ink && start >= 0) {
-      const box = bbox(m, start, y);
-      bands.push({ start, end: y, width: box.width });
-      start = -1;
-    }
-  }
-  const widest = bands.reduce((best, b, i) => (b.width > bands[best].width ? i : best), 0);
-  if (widest === 0) throw new Error("Could not find the book mark above the wordmark");
-  return [bands[0].start, bands[widest - 1].end];
-}
-
-async function save(img, file, width) {
-  await img.resize({ width, withoutEnlargement: true }).png({ compressionLevel: 9, palette: true, quality: 90, effort: 10 }).toFile(file);
-  console.log("wrote", file);
-}
-
-// Horizontal lockup (header, emails) and stacked lockup (sign-in, share pages).
-const horizontal = crop(await inkMask(`${SRC}/logo-horizontal.jpg`), bbox(await inkMask(`${SRC}/logo-horizontal.jpg`)), 8);
-const stacked = await inkMask(`${SRC}/logo-stacked.png`);
-const stackedTrim = crop(stacked, bbox(stacked), 8);
-for (const [name, color] of [["green", GREEN], ["cream", CREAM]]) {
-  await save(colorize(horizontal, color), `${OUT}/logo-horizontal-${name}.png`, 1200);
-  await save(colorize(stackedTrim, color), `${OUT}/logo-stacked-${name}.png`, 720);
-}
-
-// Book mark alone (icons, compact header).
-const [markTop, markBottom] = markRows(stackedTrim);
-const markBox = bbox(stackedTrim, markTop, markBottom);
-const mark = crop(stackedTrim, markBox, 4);
-for (const [name, color] of [["green", GREEN], ["cream", CREAM]]) await save(colorize(mark, color), `${OUT}/mark-${name}.png`, 512);
-
-/** Square icon: mark centred on a solid background, occupying `scale` of the width. */
-async function icon(file, size, bg, fg, scale, radius = 0) {
-  const markW = Math.round(size * scale);
-  const markPng = await colorize(mark, fg).resize({ width: markW }).png().toBuffer();
-  const markMeta = await sharp(markPng).metadata();
-  const base = sharp({ create: { width: size, height: size, channels: 4, background: { ...bg, alpha: 1 } } });
-  let out = base.composite([{ input: markPng, left: Math.round((size - markW) / 2), top: Math.round((size - markMeta.height) / 2) }]);
-  if (radius) {
-    const r = Math.round(size * radius);
-    const rounded = Buffer.from(`<svg width="${size}" height="${size}"><rect width="${size}" height="${size}" rx="${r}" ry="${r}"/></svg>`);
-    out = sharp(await out.png().toBuffer()).composite([{ input: rounded, blend: "dest-in" }]);
-  }
-  await out.png({ compressionLevel: 9, palette: true, quality: 90, effort: 10 }).toFile(file);
-  console.log("wrote", file);
-}
-
-await icon(`${ICONS}/icon-192.png`, 192, GREEN, CREAM, 0.72, 0.18);
-await icon(`${ICONS}/icon-512.png`, 512, GREEN, CREAM, 0.72, 0.18);
-await icon(`${ICONS}/maskable-192.png`, 192, GREEN, CREAM, 0.56);
-await icon(`${ICONS}/maskable-512.png`, 512, GREEN, CREAM, 0.56);
-await icon(`${ICONS}/apple-touch-icon.png`, 180, PAPER, GREEN, 0.7);
-await icon(`public/favicon.png`, 64, GREEN, CREAM, 0.82, 0.18);
+cpSync(ogPath, path.join(root, "site", "public", "og-image.png"));
+cpSync(path.join(root, "public", "favicon.svg"), path.join(root, "site", "public", "favicon.svg"));
+cpSync(path.join(root, "public", "favicon.png"), path.join(root, "site", "public", "favicon.png"));
+cpSync(path.join(outIcons, "apple-touch-icon.png"), path.join(siteIcons, "apple-touch-icon.png"));
+console.log("copied site assets");
+void LINEN;

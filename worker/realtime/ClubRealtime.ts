@@ -9,11 +9,12 @@ interface SocketAttachment {
 }
 
 /**
- * A single Durable Object instance ("club") holds every member's live
- * WebSocket connections using the Hibernation API. It never reads or decides
- * permissions itself: the Worker authenticates the socket before handing it
- * over, and the Worker decides which user ids receive each event after
- * persisting the authoritative data in D1.
+ * One Durable Object instance per club (named `club:<clubId>`) holds the live
+ * WebSocket connections of that club's members using the Hibernation API. It
+ * never reads or decides permissions itself: the Worker authenticates the
+ * socket and checks membership before handing it over, and the Worker decides
+ * which user ids receive each event after persisting the authoritative data
+ * in D1.
  */
 export class ClubRealtime extends DurableObject<Env> {
   async fetch(request: Request): Promise<Response> {
@@ -22,10 +23,11 @@ export class ClubRealtime extends DurableObject<Env> {
     }
     // These headers are set by the Worker after it validated the session;
     // the Durable Object is not reachable from the internet directly.
-    const userId = request.headers.get("x-trbc-user-id");
-    const sessionId = request.headers.get("x-trbc-session-id");
-    const expiresAt = Number(request.headers.get("x-trbc-session-expires"));
-    if (!userId || !sessionId || !Number.isFinite(expiresAt)) return new Response("Unauthorized", { status: 401 });
+    const userId = request.headers.get("x-chapterr-user-id");
+    const sessionId = request.headers.get("x-chapterr-session-id");
+    const clubId = request.headers.get("x-chapterr-club-id");
+    const expiresAt = Number(request.headers.get("x-chapterr-session-expires"));
+    if (!userId || !sessionId || !clubId || !Number.isFinite(expiresAt)) return new Response("Unauthorized", { status: 401 });
 
     const pair = new WebSocketPair();
     const client = pair[0];
@@ -33,7 +35,7 @@ export class ClubRealtime extends DurableObject<Env> {
     this.ctx.acceptWebSocket(server, [`user:${userId}`, `session:${sessionId}`]);
     const attachment: SocketAttachment = { userId, expiresAt };
     server.serializeAttachment(attachment);
-    server.send(JSON.stringify({ type: "hello", userId } satisfies RealtimeEvent));
+    server.send(JSON.stringify({ type: "hello", userId, clubId } satisfies RealtimeEvent));
     return new Response(null, { status: 101, webSocket: client });
   }
 
@@ -77,7 +79,7 @@ export class ClubRealtime extends DurableObject<Env> {
     return delivered;
   }
 
-  /** RPC: close every socket belonging to a user (sign-out everywhere, password reset). */
+  /** RPC: close every socket belonging to a user (removed from the club, sign-out everywhere, password reset). */
   async disconnectUser(userId: string): Promise<void> {
     for (const ws of this.ctx.getWebSockets(`user:${userId}`)) {
       try {
