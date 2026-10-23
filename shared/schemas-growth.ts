@@ -1,7 +1,7 @@
 // Feature wave 2 schemas owned by files/branding/screening/push/streaks/challenges (W3/F3). Re-exported from shared/schemas.ts.
 import { z } from "zod";
 import { CHALLENGE_KINDS, FILE_KINDS, JOIN_POLICIES, WAVE2_LIMITS } from "./constants";
-import { dateOnly, emptyToNull, idSchema, longText, plainText } from "./schemas";
+import { dateOnly, emptyToNull, idSchema, longText, plainText } from "./schema-primitives";
 
 export const hexColor = z.string().regex(/^#[0-9a-fA-F]{6}$/, "Use a colour like #1E3A2F");
 

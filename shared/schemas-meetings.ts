@@ -1,7 +1,7 @@
 // Feature wave 2 schemas owned by meetings/calendar/polls/pace (W1/F1). Re-exported from shared/schemas.ts.
 import { z } from "zod";
 import { MEETING_ROLES, PACE_CADENCES, POLL_KINDS, RECURRENCE_FREQS, RSVP_STATUSES, SIGNUP_KINDS, WAVE2_LIMITS } from "./constants";
-import { dateOnly, emptyToNull, idSchema, isoDateTime, longText, plainText, yearSchema } from "./schemas";
+import { dateOnly, emptyToNull, idSchema, isoDateTime, longText, plainText, yearSchema } from "./schema-primitives";
 
 export const recurrenceSchema = z.object({
   freq: z.enum(RECURRENCE_FREQS),

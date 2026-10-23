@@ -1,7 +1,7 @@
 // Feature wave 2 schemas owned by chat/rooms/guides (W2/F2). Re-exported from shared/schemas.ts.
 import { z } from "zod";
 import { GATE_TYPES, LIMITS, MESSAGE_EMOJI, ROOM_KINDS, WAVE2_LIMITS } from "./constants";
-import { emptyToNull, idSchema, isoDateTime, longText, plainText } from "./schemas";
+import { emptyToNull, idSchema, isoDateTime, longText, plainText } from "./schema-primitives";
 
 export const messageCreateSchema = z.object({
   body: longText(LIMITS.messageMax, 0).default(""),
