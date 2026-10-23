@@ -76,7 +76,7 @@ export function TermsPage() {
             30 days before they take effect. Continuing to use Chapterr after that means you accept the new terms.
           </p>
         </section>
-        <p className="text-sm text-ink-muted">Last updated October 2026. Questions: hello@chapterr.io</p>
+        <p className="text-sm text-ink-muted">Last updated October 2026. Questions: support@chapterr.io</p>
       </div>
     </AuthLayout>
   );
