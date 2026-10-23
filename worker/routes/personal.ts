@@ -24,6 +24,7 @@ import { finishedCount, loadQuotes, loadReviews, loadUserBooks } from "../lib/lo
 import { editionCols, mapEdition, mapMember, mapMemberOrNull, memberCols, type Row } from "../lib/mappers";
 import { emailClubUpdate, notifyUsers } from "../lib/notify";
 import { makePage, pageQuery, timeCursor } from "../lib/paging";
+import { logReadingToday } from "../lib/streaks";
 import { currentYear, newId, nowIso } from "../lib/util";
 import { enforceRateLimit } from "../security/rate-limit";
 
@@ -151,6 +152,12 @@ libraryRoutes.patch("/:id/progress", async (c) => {
   const id = c.req.param("id");
   const input = await parseBody(c, progressUpdateSchema);
   await ownedOr404(c.env.DB, "user_books", id, user.id);
+  const before = await first<{ current_page: number | null; edition_id: string }>(
+    c.env.DB,
+    "SELECT current_page, edition_id FROM user_books WHERE id = ? AND user_id = ?",
+    id,
+    user.id,
+  );
   await run(
     c.env.DB,
     "UPDATE user_books SET current_page = ?, progress_percent = ?, updated_at = ? WHERE id = ? AND user_id = ?",
@@ -160,6 +167,10 @@ libraryRoutes.patch("/:id/progress", async (c) => {
     id,
     user.id,
   );
+  // Moving forward in a book counts as reading today (streaks, recaps).
+  if (before && input.currentPage !== null && input.currentPage > (before.current_page ?? 0)) {
+    await logReadingToday(c.env.DB, user.id, before.edition_id, input.currentPage - (before.current_page ?? 0), c.req.query("today")).catch(() => undefined);
+  }
   const [book] = await loadUserBooks(c.env.DB, user.id, "ub.id = ?", [id]);
   return c.json(book);
 });

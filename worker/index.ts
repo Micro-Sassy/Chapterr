@@ -1,3 +1,4 @@
+import type { Context } from "hono";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { HTTPException } from "hono/http-exception";
@@ -44,13 +45,11 @@ const app = new Hono<AppEnv>();
 
 app.use("*", requireHttps);
 app.use("*", securityHeaders);
-app.use(
-  "/api/*",
-  bodyLimit({
-    maxSize: 2 * 1024 * 1024,
-    onError: (c) => c.json({ error: { code: "payload_too_large", message: "Request is too large" } } satisfies ApiErrorBody, 413),
-  }),
-);
+// Request bodies: 2 MB for the API, 26 MB for file uploads (R2 mode allows 25 MB files; D1 mode enforces 2 MB in storage.ts).
+const tooLarge = (c: Context<AppEnv>) => c.json({ error: { code: "payload_too_large", message: "Request is too large" } } satisfies ApiErrorBody, 413);
+const apiBodyLimit = bodyLimit({ maxSize: 2 * 1024 * 1024, onError: tooLarge });
+const uploadBodyLimit = bodyLimit({ maxSize: 26 * 1024 * 1024, onError: tooLarge });
+app.use("/api/*", (c, next) => (/^\/api\/clubs\/[^/]+\/(files|branding)(\/|$)/.test(c.req.path) ? uploadBodyLimit(c, next) : apiBodyLimit(c, next)));
 app.use("/api/*", sameOriginGuard);
 
 // --- Public, unauthenticated endpoints -----------------------------------------
