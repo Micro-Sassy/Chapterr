@@ -2,7 +2,17 @@ import type { ClubRole } from "../shared/constants";
 import type { AuthSessionData } from "./auth/auth";
 
 /** All Worker bindings: wrangler.jsonc vars + secrets set with `wrangler secret put`. */
-type SecretKeys = "BETTER_AUTH_SECRET" | "RESEND_API_KEY" | "TURNSTILE_SECRET_KEY" | "GOOGLE_BOOKS_API_KEY" | "PASSWORD_HASH_ITERATIONS";
+type SecretKeys =
+  | "BETTER_AUTH_SECRET"
+  | "RESEND_API_KEY"
+  | "TURNSTILE_SECRET_KEY"
+  | "GOOGLE_BOOKS_API_KEY"
+  | "PASSWORD_HASH_ITERATIONS"
+  | "VAPID_PRIVATE_KEY"
+  | "ANTHROPIC_API_KEY"
+  | "TWILIO_ACCOUNT_SID"
+  | "TWILIO_AUTH_TOKEN"
+  | "TWILIO_FROM";
 
 export interface Env extends Omit<CloudflareBindings, SecretKeys> {
   /** PBKDF2 iterations for new password hashes (see worker/auth/password.ts). */

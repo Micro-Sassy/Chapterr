@@ -21,6 +21,20 @@ const PREF_COLUMN: Record<NotificationKind, string | null> = {
   club_member_joined: null,
   club_role_changed: null,
   club_removed: null,
+  // Feature wave 2 (docs/FEATURES-2.md §8). Reminders, joins, mentions and digests are always delivered in-app;
+  // push/email/SMS channels apply their own preference columns.
+  meeting_reminder: null,
+  rsvp_update: "inapp_club_updates",
+  poll_opened: "inapp_club_updates",
+  poll_closed: "inapp_club_updates",
+  join_request: null,
+  join_approved: null,
+  mention: null,
+  thread_reply: "inapp_direct_messages",
+  reaction: "inapp_reactions",
+  digest: null,
+  challenge_update: "inapp_club_updates",
+  welcome: null,
 };
 
 export interface NotifyInput {

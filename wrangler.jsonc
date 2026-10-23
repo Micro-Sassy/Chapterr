@@ -38,6 +38,11 @@
     }
   ],
 
+  // Files (documents, photos, chat attachments). Optional: enable R2 in the
+  // Cloudflare dashboard (free tier), create a bucket named "chapterr-files",
+  // then uncomment. Without it, files are stored in D1 (2 MB per file).
+  // "r2_buckets": [{ "binding": "FILES", "bucket_name": "chapterr-files" }],
+
   // Realtime chat fan-out. The class is exported from worker/index.ts.
   // SQLite-backed Durable Objects are available on the Workers Free plan.
   "durable_objects": {
@@ -63,12 +68,16 @@
     "TURNSTILE_SITE_KEY": "0x4AAAAAAFh_VJmuejJdtAKq",
     // PBKDF2 iterations for new password hashes (10000–100000). Lower only if
     // sign-ins fail with error 1102 on the Workers Free plan. See README.
-    "PASSWORD_HASH_ITERATIONS": "100000"
+    "PASSWORD_HASH_ITERATIONS": "100000",
+    // Web Push (VAPID). The matching private key is the VAPID_PRIVATE_KEY secret.
+    "VAPID_PUBLIC_KEY": "BBV33fjfxBq-MpyNBdWMlEFmD_hX9Y_Ag0HiMEVlnnq1-p8jAZlZV7TntUXCVJzNjkUK1MC0kcaKpEVzQGzZ7Fc",
+    "VAPID_SUBJECT": "mailto:support@chapterr.io"
   },
 
   // Daily housekeeping (expired sessions, rate-limit counters, old notifications).
   // Cron Triggers are included in the Workers Free plan.
-  "triggers": { "crons": ["17 4 * * *"] },
+  // Every 15 minutes: meeting reminders, scheduled messages, digests; daily housekeeping runs on the 04:17 tick.
+  "triggers": { "crons": ["*/15 * * * *"] },
 
   // The app's address (a Workers Custom Domain; Cloudflare manages its DNS record and certificate).
   "routes": [{ "pattern": "app.chapterr.io", "custom_domain": true }],

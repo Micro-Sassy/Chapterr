@@ -69,6 +69,19 @@ export const NOTIFICATION_KINDS = [
   "club_member_joined",
   "club_role_changed",
   "club_removed",
+  // Feature wave 2
+  "meeting_reminder",
+  "rsvp_update",
+  "poll_opened",
+  "poll_closed",
+  "join_request",
+  "join_approved",
+  "mention",
+  "thread_reply",
+  "reaction",
+  "digest",
+  "challenge_update",
+  "welcome",
 ] as const;
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
 
@@ -130,3 +143,68 @@ export const RESERVED_USERNAMES = new Set([
   "anonymous",
   "everyone",
 ]);
+
+// ---------------------------------------------------------------------------
+// Feature wave 2 (see docs/FEATURES-2.md)
+// ---------------------------------------------------------------------------
+
+export const RSVP_STATUSES = ["going", "maybe", "no"] as const;
+export type RsvpStatus = (typeof RSVP_STATUSES)[number];
+export const RSVP_LABELS: Record<RsvpStatus, string> = { going: "Going", maybe: "Maybe", no: "Can't make it" };
+
+export const MEETING_ROLES = ["host", "picker", "notetaker"] as const;
+export type MeetingRole = (typeof MEETING_ROLES)[number];
+export const MEETING_ROLE_LABELS: Record<MeetingRole, string> = { host: "Host", picker: "Picker", notetaker: "Note-taker" };
+
+export const RECURRENCE_FREQS = ["weekly", "biweekly", "monthly", "custom"] as const;
+export type RecurrenceFreq = (typeof RECURRENCE_FREQS)[number];
+
+export const SIGNUP_KINDS = ["potluck", "supplies", "tasks", "other"] as const;
+export type SignupKind = (typeof SIGNUP_KINDS)[number];
+
+export const POLL_KINDS = ["book", "date", "custom"] as const;
+export type PollKind = (typeof POLL_KINDS)[number];
+
+export const FILE_KINDS = ["document", "photo", "recipe", "minutes", "banner", "attachment"] as const;
+export type FileKind = (typeof FILE_KINDS)[number];
+
+export const ROOM_KINDS = ["chapter", "milestone", "reflection"] as const;
+export type RoomKind = (typeof ROOM_KINDS)[number];
+export const GATE_TYPES = ["none", "chapter", "page", "percent", "finished"] as const;
+export type GateType = (typeof GATE_TYPES)[number];
+
+export const CHALLENGE_KINDS = ["books", "pages", "genre", "streak", "custom"] as const;
+export type ChallengeKind = (typeof CHALLENGE_KINDS)[number];
+
+export const PACE_CADENCES = ["weekly", "twice_weekly", "daily"] as const;
+export type PaceCadence = (typeof PACE_CADENCES)[number];
+
+export const MAPPING_KINDS = ["kindle", "audio"] as const;
+export type MappingKind = (typeof MAPPING_KINDS)[number];
+
+export const JOIN_POLICIES = ["link", "approval"] as const;
+export type JoinPolicy = (typeof JOIN_POLICIES)[number];
+
+/** Reactions available on chat messages (a curated set keeps the picker small and the data clean). */
+export const MESSAGE_EMOJI = ["👍", "❤️", "😂", "😮", "😢", "👏", "📚", "🔥", "🤔", "✅", "🎉", "👀", "☕", "🍷", "🥐", "💬"] as const;
+export type MessageEmoji = (typeof MESSAGE_EMOJI)[number];
+
+export const WAVE2_LIMITS = {
+  pollOptionsMax: 20,
+  pollTitleMax: 200,
+  signupItemsMax: 60,
+  attachmentsPerMessage: 4,
+  fileBytesMaxD1: 2_000_000,
+  fileBytesMaxR2: 25_000_000,
+  filesPerClub: 200,
+  clubStorageBytesMax: 200_000_000,
+  clubStorageBytesMaxD1: 50_000_000,
+  bulkInviteRowsMax: 200,
+  recurrenceOccurrencesMax: 52,
+  roomsPerBookMax: 60,
+  guideQuestionsMax: 40,
+  screeningQuestionsMax: 5,
+  scheduledMessagesPerUser: 20,
+  welcomeMessageMax: 1000,
+  notesMax: 20_000,
+} as const;

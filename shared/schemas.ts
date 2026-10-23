@@ -456,3 +456,8 @@ export const importBatchSchema = z.object({
   totalRows: z.number().int().min(1).max(20_000),
   isFinalBatch: z.boolean().default(false),
 });
+
+// Feature wave 2 (docs/FEATURES-2.md): per-domain files so parallel streams do not collide.
+export * from "./schemas-meetings";
+export * from "./schemas-chat";
+export * from "./schemas-growth";

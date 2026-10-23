@@ -519,3 +519,11 @@ export type RealtimeEvent =
   | { type: "membership.ended"; clubId: string }
   | { type: "hello"; userId: string; clubId: string }
   | { type: "pong" };
+
+// ---------------------------------------------------------------------------
+// Feature wave 2 (docs/FEATURES-2.md): types live in per-domain files so the
+// parallel work streams do not edit the same file.
+// ---------------------------------------------------------------------------
+export * from "./types-meetings";
+export * from "./types-chat";
+export * from "./types-growth";

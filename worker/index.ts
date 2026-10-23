@@ -21,7 +21,19 @@ import { memberRoutes } from "./routes/members";
 import { conversationRoutes, messageRoutes, realtimeUpgrade } from "./routes/messages";
 import { notificationRoutes } from "./routes/notifications";
 import { clubQuoteRoutes, clubReviewRoutes, goalRoutes, libraryRoutes, quoteRoutes, recommendationRoutes, reviewRoutes } from "./routes/personal";
+import { runCron } from "./cron";
+import { calendarFeed } from "./routes/calendar-feed";
+import { challengeRoutes, clubChallengeRoutes } from "./routes/challenges";
 import { coverRoutes } from "./routes/covers";
+import { fileRoutes } from "./routes/files";
+import { meetingRoutes } from "./routes/meetings";
+import { membershipRoutes } from "./routes/membership";
+import { pollRoutes } from "./routes/polls";
+import { pushRoutes } from "./routes/push";
+import { readingLogRoutes } from "./routes/reading";
+import { personalRecapRoutes, recapRoutes } from "./routes/recaps";
+import { roomRoutes } from "./routes/rooms";
+import { scheduledRoutes } from "./routes/scheduled";
 import { publicRoutes, shareRoutes } from "./routes/shares";
 import { purgeRateLimits } from "./security/rate-limit";
 import { requireHttps, sameOriginGuard, securityHeaders } from "./security/headers";
@@ -61,6 +73,7 @@ app.get("/api/config", (c) => {
 app.route("/api/auth", authRoutes);
 app.route("/api/public", publicRoutes);
 app.route("/api/public/covers", coverRoutes);
+app.get("/api/public/calendar/:token", calendarFeed);
 // Invite preview works signed out (the join page is where new members land).
 app.get("/api/invites/:code", invitePreview);
 
@@ -96,6 +109,11 @@ api.route("/shares", shareRoutes);
 api.route("/notifications", notificationRoutes);
 api.route("/imports", importRoutes);
 api.route("/", homeRoutes);
+// Feature wave 2, personal (docs/FEATURES-2.md).
+api.route("/push", pushRoutes);
+api.route("/reading-log", readingLogRoutes);
+api.route("/challenges", challengeRoutes);
+api.route("/recaps", personalRecapRoutes);
 
 // Club list / create / join (no club context). Registered before the
 // club-scoped router so POST /clubs/join is never read as a club id.
@@ -115,6 +133,15 @@ club.route("/quotes", clubQuoteRoutes);
 club.route("/recommendations", recommendationRoutes);
 club.route("/conversations", conversationRoutes);
 club.route("/messages", messageRoutes);
+// Feature wave 2, club-scoped (docs/FEATURES-2.md §10).
+club.route("/", meetingRoutes);
+club.route("/polls", pollRoutes);
+club.route("/", roomRoutes);
+club.route("/scheduled", scheduledRoutes);
+club.route("/files", fileRoutes);
+club.route("/", membershipRoutes);
+club.route("/challenges", clubChallengeRoutes);
+club.route("/recaps", recapRoutes);
 api.route("/clubs/:clubId", club);
 
 api.get("/avatars/:userId", async (c) => {
@@ -176,7 +203,7 @@ export async function runHousekeeping(env: Env, now = new Date()): Promise<void>
 export default {
   fetch: app.fetch,
   async scheduled(_event, env, ctx) {
-    ctx.waitUntil(runHousekeeping(env));
+    ctx.waitUntil(runCron(env));
   },
 } satisfies ExportedHandler<Env>;
 
