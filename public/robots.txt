@@ -1,4 +1,4 @@
-# Private book club app. This is an indexing preference only —
-# access to member data is enforced by server-side authentication.
+# Chapterr app. This is an indexing preference only; access to member data is
+# enforced by server-side authentication. The marketing site lives at chapterr.io.
 User-agent: *
 Disallow: /

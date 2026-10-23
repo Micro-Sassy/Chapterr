@@ -3,34 +3,72 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ExternalLink, ListPlus, Pencil, Quote as QuoteIcon, Sparkles, Star, Tags, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
-import { Link, useParams } from "react-router";
+import { useParams } from "react-router";
 import type { z } from "zod";
 import { READING_STATUSES, READING_STATUS_LABELS } from "@shared/constants";
 import { userBookSchema } from "@shared/schemas";
-import type { EditionDetail, EditionSummary, Genre, MemberSummary, Quote, Review, UserBook } from "@shared/types";
+import type { ClubMember, EditionDetail, EditionSummary, Genre, Quote, Review, UserBook } from "@shared/types";
 import { BookCover } from "@/components/BookCover";
 import { BookRow, EditionForm } from "@/components/books";
 import { QuoteCard, QuoteForm, ReviewCard, ReviewForm, VisibilityField } from "@/components/content";
-import { Alert, Badge, Button, Card, Checkbox, EmptyState, Field, Input, SectionTitle, Select, Spinner, Textarea } from "@/components/ui";
+import { clubApi } from "@/components/records";
+import { Alert, Badge, Button, Card, Checkbox, EmptyState, Field, Input, LinkButton, SectionTitle, Select, Spinner, Textarea, TextLink } from "@/components/ui";
 import { Dialog } from "@/components/ui/Dialog";
 import { useToast } from "@/components/ui/Toast";
 import { api, ApiRequestError, errorMessage } from "@/lib/api";
 import { useSession } from "@/lib/auth";
+import { clubPath, useCurrentClubId, useMe } from "@/lib/club";
 import { authorsLine, todayIso } from "@/lib/format";
 import { useDocumentTitle } from "@/lib/hooks";
 
 interface EditionResponse {
   edition: EditionDetail;
-  clubStats: Partial<Record<string, number>>;
+  /** Reading-status counts among members who share a club with the viewer. */
+  clubStats?: Partial<Record<string, number>>;
   otherEditions: EditionSummary[];
 }
 
 type ShelfValues = z.input<typeof userBookSchema>;
 
+/** Choose one of the member's clubs; defaults to the club in scope. */
+function useClubChoice() {
+  const me = useMe();
+  const current = useCurrentClubId();
+  const clubs = me.data?.clubs ?? [];
+  const [clubId, setClubId] = useState<string>("");
+  const effective = clubId || current || clubs[0]?.id || "";
+  return { clubs, clubId: effective, setClubId, loading: me.isPending };
+}
+
+function ClubField({ clubs, value, onChange }: { clubs: { id: string; name: string }[]; value: string; onChange: (id: string) => void }) {
+  if (clubs.length <= 1) return null;
+  return (
+    <Field label="Club">
+      {(id) => (
+        <Select id={id} value={value} onChange={(e) => onChange(e.target.value)}>
+          {clubs.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </Select>
+      )}
+    </Field>
+  );
+}
+
+function NoClubs() {
+  return (
+    <EmptyState title="You're not in a club yet" action={<LinkButton to="/clubs/new">Create a club</LinkButton>}>
+      Clubs are where recommendations, reading lists and genres live.
+    </EmptyState>
+  );
+}
+
 function ShelfForm({ editionId, entry, onDone }: { editionId: string; entry: UserBook | null; onDone: () => void }) {
   const qc = useQueryClient();
   const toast = useToast();
-  const me = useQuery({ queryKey: ["me"], queryFn: () => api<{ profile: { defaultVisibility: "club" | "private" } }>("/api/account/me") });
+  const me = useMe();
   const form = useForm<ShelfValues>({
     resolver: zodResolver(userBookSchema),
     defaultValues: {
@@ -53,11 +91,11 @@ function ShelfForm({ editionId, entry, onDone }: { editionId: string; entry: Use
       if (body.status === "finished" && !body.finishedAt && !entry?.finishedAt) body.finishedAt = todayIso();
       return api<UserBook>(`/api/library/editions/${editionId}`, { method: "PUT", body });
     },
-    onSuccess: () => {
+    onSuccess: (saved) => {
       void qc.invalidateQueries({ queryKey: ["library"] });
-      void qc.invalidateQueries({ queryKey: ["dashboard"] });
+      void qc.invalidateQueries({ queryKey: ["home"] });
       void qc.invalidateQueries({ queryKey: ["goal"] });
-      toast("Shelf updated");
+      toast(saved.status === "finished" ? "Finished. Nicely done!" : "Shelved.");
       onDone();
     },
   });
@@ -111,19 +149,30 @@ function RecommendForm({ editionId, onDone }: { editionId: string; onDone: () =>
   const toast = useToast();
   const qc = useQueryClient();
   const { data: session } = useSession();
-  const members = useQuery({ queryKey: ["members"], queryFn: () => api<MemberSummary[]>("/api/members") });
+  const { clubs, clubId, setClubId, loading } = useClubChoice();
+  const members = useQuery({ queryKey: ["club-members", clubId], queryFn: () => api<ClubMember[]>(clubApi(clubId, "/members")), enabled: !!clubId });
   const [recipient, setRecipient] = useState("");
   const [note, setNote] = useState("");
   const send = useMutation({
-    mutationFn: () => api("/api/recommendations", { body: { editionId, recipientUserId: recipient || null, note } }),
+    mutationFn: () => api(clubApi(clubId, "/recommendations"), { body: { editionId, recipientUserId: recipient || null, note } }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["recommendations"] });
-      toast("Recommendation sent");
+      toast("Recommendation sent.");
       onDone();
     },
   });
+  if (loading) return <Spinner />;
+  if (!clubId) return <NoClubs />;
   return (
     <div className="space-y-4">
+      <ClubField
+        clubs={clubs}
+        value={clubId}
+        onChange={(id) => {
+          setClubId(id);
+          setRecipient("");
+        }}
+      />
       <Field label="Recommend to">
         {(id) => (
           <Select id={id} value={recipient} onChange={(e) => setRecipient(e.target.value)}>
@@ -150,52 +199,71 @@ function RecommendForm({ editionId, onDone }: { editionId: string; onDone: () =>
 function AddToClubListForm({ editionId, onDone }: { editionId: string; onDone: () => void }) {
   const toast = useToast();
   const qc = useQueryClient();
+  const { clubs, clubId, setClubId, loading } = useClubChoice();
   const [year, setYear] = useState(String(new Date().getFullYear()));
   const add = useMutation({
-    mutationFn: () => api("/api/club/books", { body: { year: Number(year), editionId } }),
+    mutationFn: () => api(clubApi(clubId, "/books"), { body: { year: Number(year), editionId } }),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["club-books"] });
-      toast(`Added to the ${year} club list`);
+      void qc.invalidateQueries({ queryKey: ["club-books", clubId] });
+      void qc.invalidateQueries({ queryKey: ["club-dashboard", clubId] });
+      toast(`Added to the ${year} list.`);
       onDone();
     },
   });
+  if (loading) return <Spinner />;
+  if (!clubId) return <NoClubs />;
   return (
     <div className="space-y-4">
+      <ClubField clubs={clubs} value={clubId} onChange={setClubId} />
       <Field label="Year">{(id) => <Input id={id} type="number" min={1900} max={2200} value={year} onChange={(e) => setYear(e.target.value)} />}</Field>
       {add.isError && <Alert tone="error">{errorMessage(add.error)}</Alert>}
       <Button icon={ListPlus} loading={add.isPending} onClick={() => add.mutate()}>
-        Add to club list
+        Add to list
       </Button>
     </div>
   );
 }
 
+/** Genres belong to a club; tag this book with one club's genres at a time. */
 function GenreEditor({ bookId, current, onDone }: { bookId: string; current: Genre[]; onDone: () => void }) {
   const qc = useQueryClient();
   const toast = useToast();
-  const genres = useQuery({ queryKey: ["genres"], queryFn: () => api<Genre[]>("/api/genres") });
-  const [selected, setSelected] = useState(new Set(current.map((g) => g.id)));
+  const { clubs, clubId, setClubId, loading } = useClubChoice();
+  const genres = useQuery({ queryKey: ["genres", clubId, false], queryFn: () => api<Genre[]>(clubApi(clubId, "/genres")), enabled: !!clubId });
+  const [selected, setSelected] = useState<Set<string> | null>(null);
+  const chosen = selected ?? new Set(current.filter((g) => !g.clubId || g.clubId === clubId).map((g) => g.id));
   const save = useMutation({
-    mutationFn: () => api(`/api/books/works/${bookId}/genres`, { method: "PUT", body: { genreIds: Array.from(selected) } }),
+    mutationFn: () => api(clubApi(clubId, `/works/${bookId}/genres`), { method: "PUT", body: { genreIds: Array.from(chosen) } }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["edition"] });
-      void qc.invalidateQueries({ queryKey: ["genres"] });
-      toast("Genres updated for every edition of this book");
+      void qc.invalidateQueries({ queryKey: ["genres", clubId] });
+      toast("Genres updated.");
       onDone();
     },
   });
-  if (genres.isPending) return <Spinner />;
+  if (loading) return <Spinner />;
+  if (!clubId) return <NoClubs />;
   return (
     <div className="space-y-4">
-      {genres.data?.length ? (
+      <ClubField
+        clubs={clubs}
+        value={clubId}
+        onChange={(id) => {
+          setClubId(id);
+          setSelected(null);
+        }}
+      />
+      {genres.isPending ? (
+        <Spinner />
+      ) : genres.data?.length ? (
         <div className="grid grid-cols-2 gap-2">
           {genres.data.map((g) => (
             <Checkbox
               key={g.id}
               label={g.name}
-              checked={selected.has(g.id)}
+              checked={chosen.has(g.id)}
               onChange={(e) => {
-                const next = new Set(selected);
+                const next = new Set(chosen);
                 if (e.target.checked) next.add(g.id);
                 else next.delete(g.id);
                 setSelected(next);
@@ -204,10 +272,10 @@ function GenreEditor({ bookId, current, onDone }: { bookId: string; current: Gen
           ))}
         </div>
       ) : (
-        <p className="text-sm text-ink-muted">No genres yet.</p>
+        <p className="text-sm text-ink-muted">This club has no genres yet.</p>
       )}
       <p className="text-xs text-ink-muted">
-        Manage the club's genre list on the <Link to="/club/genres" className="text-accent underline">Genres page</Link>.
+        Manage the list on the club's <TextLink to={clubPath(clubId, "genres")}>Genres page</TextLink>. Genres apply to every edition of this book.
       </p>
       {save.isError && <Alert tone="error">{errorMessage(save.error)}</Alert>}
       <Button loading={save.isPending} onClick={() => save.mutate()}>
@@ -241,7 +309,8 @@ export function BookDetailPage() {
     mutationFn: () => api(`/api/library/${shelf.data!.id}`, { method: "DELETE" }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["library"] });
-      toast("Removed from your library");
+      void qc.invalidateQueries({ queryKey: ["home"] });
+      toast("Removed from your library.");
     },
   });
 
@@ -253,19 +322,19 @@ export function BookDetailPage() {
   if (edition.isError) return <Alert tone="error">{errorMessage(edition.error)}</Alert>;
   const e = edition.data.edition;
   const myReview = reviews.data?.find((r) => r.isOwn);
-  const stats = edition.data.clubStats;
+  const stats = edition.data.clubStats ?? {};
 
   return (
-    <div className="space-y-6">
-      <Card className="flex flex-col gap-5 sm:flex-row">
+    <div className="space-y-8">
+      <Card className="flex flex-col gap-6 sm:flex-row">
         <BookCover url={e.coverUrlLarge ?? e.coverUrl} title={e.title} size="lg" className="self-center sm:self-start" />
-        <div className="min-w-0 flex-1 space-y-3">
+        <div className="min-w-0 flex-1 space-y-4">
           <div>
-            <h1 className="text-3xl sm:text-3xl">{e.title}</h1>
-            {e.subtitle && <p className="text-ink-muted">{e.subtitle}</p>}
-            <p className="mt-1">{authorsLine(e.authors)}</p>
+            <h1 className="book-title text-3xl leading-tight sm:text-4xl">{e.title}</h1>
+            {e.subtitle && <p className="mt-1 text-lg text-ink-muted">{e.subtitle}</p>}
+            <p className="mt-2">{authorsLine(e.authors)}</p>
           </div>
-          <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm sm:grid-cols-3">
+          <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-3">
             {e.isbn13 && (
               <div>
                 <dt className="text-xs text-ink-muted">ISBN-13</dt>
@@ -303,23 +372,24 @@ export function BookDetailPage() {
               </div>
             )}
           </dl>
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
             {e.genres.map((g) => (
-              <Badge key={g.id} tone="accent">
+              <Badge key={g.id} tone="info" className="gap-1">
                 {g.name}
+                {g.clubName && <span className="font-normal text-ink-muted">· {g.clubName}</span>}
               </Badge>
             ))}
-            <button type="button" onClick={() => setDialog("genres")} className="inline-flex items-center gap-1 text-xs text-accent underline">
+            <button type="button" onClick={() => setDialog("genres")} className="inline-flex items-center gap-1 text-xs font-medium text-ink underline">
               <Tags className="size-3" aria-hidden /> Edit genres
             </button>
           </div>
           <div className="flex flex-wrap gap-2 pt-1">
             <Button onClick={() => setDialog("shelf")}>{shelf.data ? `On my shelf: ${READING_STATUS_LABELS[shelf.data.status]}` : "Add to my library"}</Button>
             <Button variant="secondary" icon={Star} onClick={() => setDialog("review")}>
-              {myReview ? "Edit my review" : "Write a review"}
+              {myReview ? "Edit review" : "Write review"}
             </Button>
             <Button variant="secondary" icon={QuoteIcon} onClick={() => setDialog("quote")}>
-              Save a quote
+              Save quote
             </Button>
             <Button variant="secondary" icon={Sparkles} onClick={() => setDialog("recommend")}>
               Recommend
@@ -340,21 +410,23 @@ export function BookDetailPage() {
 
       {(stats.reading || stats.finished || stats.tbr) && (
         <p className="text-sm text-ink-muted">
-          In the club: {stats.reading ?? 0} reading · {stats.finished ?? 0} finished · {stats.tbr ?? 0} want to read
+          In your clubs: {stats.reading ?? 0} reading · {stats.finished ?? 0} finished · {stats.tbr ?? 0} want to read
         </p>
       )}
 
       {e.description && (
         <Card>
           <SectionTitle>About this book</SectionTitle>
-          <p className="whitespace-pre-wrap text-sm leading-relaxed">{e.description}</p>
+          <p className="max-w-prose whitespace-pre-wrap text-[15px] leading-relaxed">{e.description}</p>
         </Card>
       )}
 
       <section>
         <SectionTitle>Reviews</SectionTitle>
         {reviews.isPending && <Spinner />}
-        {reviews.data?.length === 0 && <EmptyState icon={Star} title="No reviews yet" />}
+        {reviews.data?.length === 0 && (
+          <EmptyState icon={Star} title="No reviews yet" action={<Button variant="secondary" onClick={() => setDialog("review")}>Write review</Button>} />
+        )}
         <div className="space-y-3">
           {reviews.data?.map((r) => (
             <ReviewCard key={r.id} review={r} />
@@ -364,7 +436,9 @@ export function BookDetailPage() {
 
       <section>
         <SectionTitle>Quotes</SectionTitle>
-        {quotes.data?.length === 0 && <EmptyState icon={QuoteIcon} title="No quotes saved yet" />}
+        {quotes.data?.length === 0 && (
+          <EmptyState icon={QuoteIcon} title="No quotes saved yet" action={<Button variant="secondary" onClick={() => setDialog("quote")}>Save quote</Button>} />
+        )}
         <div className="space-y-3">
           {quotes.data?.map((q) => (
             <QuoteCard key={q.id} quote={q} showBook={false} />
@@ -377,22 +451,22 @@ export function BookDetailPage() {
         <ul className="flex flex-wrap gap-2">
           {e.retailerLinks.map((l) => (
             <li key={l.label}>
-              <a href={l.url} target="_blank" rel="noopener noreferrer nofollow" className="inline-flex items-center gap-1 rounded-full border border-line px-3 py-1.5 text-sm hover:bg-surface-2">
+              <a href={l.url} target="_blank" rel="noopener noreferrer nofollow" className="inline-flex items-center gap-1 rounded-control border border-line px-3 py-1.5 text-sm hover:bg-surface-2">
                 {l.label} <ExternalLink className="size-3" aria-hidden />
               </a>
             </li>
           ))}
         </ul>
-        <p className="mt-2 text-xs text-ink-muted">Plain search links — no tracking or affiliate codes.</p>
+        <p className="mt-2 text-xs text-ink-muted">Plain search links. No tracking or affiliate codes.</p>
       </Card>
 
       {edition.data.otherEditions.length > 0 && (
         <section>
-          <SectionTitle>Other editions in the club catalogue</SectionTitle>
+          <SectionTitle>Other editions</SectionTitle>
           <ul className="grid gap-3 sm:grid-cols-2">
             {edition.data.otherEditions.map((o) => (
               <li key={o.id}>
-                <Card className="p-3">
+                <Card className="p-3 sm:p-4">
                   <BookRow edition={o} meta={o.isbn13 ? `ISBN ${o.isbn13}` : undefined} />
                 </Card>
               </li>
@@ -403,7 +477,7 @@ export function BookDetailPage() {
 
       <p className="text-xs text-ink-muted">
         Details wrong?{" "}
-        <button type="button" className="inline-flex items-center gap-1 text-accent underline" onClick={() => setDialog("edit")}>
+        <button type="button" className="inline-flex items-center gap-1 font-medium text-ink underline" onClick={() => setDialog("edit")}>
           <Pencil className="size-3" aria-hidden /> Correct this edition
         </button>
       </p>
@@ -417,10 +491,10 @@ export function BookDetailPage() {
       <Dialog open={dialog === "quote"} onClose={() => setDialog(null)} title="Save a quote">
         <QuoteForm editionId={e.id} onDone={() => setDialog(null)} />
       </Dialog>
-      <Dialog open={dialog === "recommend"} onClose={() => setDialog(null)} title="Recommend this book">
+      <Dialog open={dialog === "recommend"} onClose={() => setDialog(null)} title="Recommend to a club">
         <RecommendForm editionId={e.id} onDone={() => setDialog(null)} />
       </Dialog>
-      <Dialog open={dialog === "club"} onClose={() => setDialog(null)} title="Add to the club's annual list">
+      <Dialog open={dialog === "club"} onClose={() => setDialog(null)} title="Add to a club's reading list">
         <AddToClubListForm editionId={e.id} onDone={() => setDialog(null)} />
       </Dialog>
       <Dialog open={dialog === "genres"} onClose={() => setDialog(null)} title="Genres">
@@ -434,7 +508,7 @@ export function BookDetailPage() {
             try {
               await api(`/api/books/editions/${e.id}`, { method: "PUT", body: { ...values, expectedVersion: e.version } });
               await qc.invalidateQueries({ queryKey: ["edition", id] });
-              toast("Edition updated");
+              toast("Edition updated.");
               setDialog(null);
             } catch (err) {
               if (err instanceof ApiRequestError && err.status === 409) {

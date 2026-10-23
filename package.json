@@ -1,9 +1,9 @@
 {
-  "name": "teel-ridge-book-club",
+  "name": "chapterr",
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "Private progressive web app for the Teel Ridge Book Club.",
+  "description": "Chapterr: a progressive web app for book clubs. Your club, one shelf.",
   "engines": {
     "node": ">=20.19"
   },

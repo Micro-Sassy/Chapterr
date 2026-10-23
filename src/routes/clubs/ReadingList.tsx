@@ -7,7 +7,7 @@ import type { Assignment, ClubAnnualBook, ClubGoal, EditionSummary, Meeting } fr
 import { BookPicker, BookRow } from "@/components/books";
 import { ShareDialog } from "@/components/content";
 import { AuditLine, clubApi, useSharedMutation } from "@/components/records";
-import { Alert, Badge, Button, Card, Checkbox, EmptyState, Field, IconButton, Input, LinkButton, PageHeader, ProgressBar, SectionTitle, Select, Spinner, Textarea } from "@/components/ui";
+import { Alert, Badge, Button, Card, Checkbox, EmptyState, Field, IconButton, Input, LinkButton, PageHeader, ProgressBar, SectionTitle, Select, Spinner, Textarea, type BadgeTone } from "@/components/ui";
 import { Dialog } from "@/components/ui/Dialog";
 import { api } from "@/lib/api";
 import { clubPath, useClub } from "@/lib/club";
@@ -15,7 +15,7 @@ import { formatDate, todayIso } from "@/lib/format";
 import { useDocumentTitle } from "@/lib/hooks";
 
 const statusLabels: Record<ClubBookStatus, string> = { planned: "Planned", current: "Reading now", completed: "Finished" };
-const statusTone = (s: ClubBookStatus) => (s === "completed" ? "success" : s === "current" ? "brass" : "neutral") as const;
+const statusTone = (s: ClubBookStatus): BadgeTone => (s === "completed" ? "success" : s === "current" ? "brass" : "neutral");
 
 function GoalEditor({ clubId, year, goal, completed }: { clubId: string; year: number; goal: ClubGoal | null; completed: number }) {
   const [editing, setEditing] = useState(false);

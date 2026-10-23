@@ -1,4 +1,5 @@
 # Security headers for static assets served by Cloudflare Workers Static Assets.
+# Fonts (Fraunces, Inter) and brand images are self-hosted, so no extra hosts are needed.
 /*
   Strict-Transport-Security: max-age=63072000; includeSubDomains
   X-Content-Type-Options: nosniff

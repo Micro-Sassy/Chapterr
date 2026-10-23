@@ -1,64 +1,23 @@
 {
-  "name": "Teel Ridge Book Club",
-  "short_name": "Teel Ridge",
-  "description": "Private reading app for the Teel Ridge Book Club.",
+  "name": "Chapterr",
+  "short_name": "Chapterr",
+  "description": "Chapterr — Your club, one shelf. A calm home for book clubs: the shelf, the schedule, the conversation.",
   "id": "/",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#f1e7d0",
-  "theme_color": "#213a2f",
-  "categories": [
-    "books",
-    "social"
-  ],
+  "background_color": "#F4EEE2",
+  "theme_color": "#1E3A2F",
+  "categories": ["books", "social"],
   "icons": [
-    {
-      "src": "/icons/icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/icons/icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/icons/maskable-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "maskable"
-    },
-    {
-      "src": "/icons/maskable-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "maskable"
-    }
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ],
   "shortcuts": [
-    {
-      "name": "My library",
-      "url": "/library",
-      "icons": [
-        {
-          "src": "/icons/icon-192.png",
-          "sizes": "192x192"
-        }
-      ]
-    },
-    {
-      "name": "Messages",
-      "url": "/messages",
-      "icons": [
-        {
-          "src": "/icons/icon-192.png",
-          "sizes": "192x192"
-        }
-      ]
-    }
+    { "name": "Home", "url": "/", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "My library", "url": "/library", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] }
   ]
 }

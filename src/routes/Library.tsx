@@ -1,12 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { Plus, Share2 } from "lucide-react";
 import { useMemo, useState } from "react";
-import { Link, useSearchParams } from "react-router";
+import { useSearchParams } from "react-router";
 import { READING_STATUSES, READING_STATUS_LABELS, type ReadingStatus } from "@shared/constants";
 import type { UserBook } from "@shared/types";
 import { BookRow } from "@/components/books";
 import { ShareDialog, VisibilityBadge } from "@/components/content";
-import { Alert, Button, Card, EmptyState, Input, PageHeader, ProgressBar, Spinner, Tabs } from "@/components/ui";
+import { Alert, Button, Card, EmptyState, Input, LinkButton, PageHeader, ProgressBar, Spinner, Tabs, TextLink } from "@/components/ui";
 import { api, errorMessage } from "@/lib/api";
 import { formatDate } from "@/lib/format";
 import { useDocumentTitle } from "@/lib/hooks";
@@ -35,16 +35,17 @@ export function LibraryPage() {
   return (
     <div>
       <PageHeader
+        eyebrow="You"
         title="My library"
-        description="Your TBR, current reads and finished books."
+        description="Your to-read shelf, current reads and finished books. Yours across every club."
         actions={
           <>
             <Button variant="secondary" icon={Share2} onClick={() => setSharing(true)}>
               Share list
             </Button>
-            <Link to="/books/add" className="inline-flex h-10 items-center gap-2 rounded-[var(--radius)] bg-accent px-4 text-sm font-medium text-on-accent">
-              <Plus className="size-4" aria-hidden /> Add book
-            </Link>
+            <LinkButton to="/books/add" icon={Plus}>
+              Add book
+            </LinkButton>
           </>
         }
       />
@@ -58,14 +59,14 @@ export function LibraryPage() {
       {q.isPending && <Spinner />}
       {q.isError && <Alert tone="error">{errorMessage(q.error)}</Alert>}
       {q.isSuccess && items.length === 0 && (
-        <EmptyState title={`Nothing in “${READING_STATUS_LABELS[status]}”`} action={<Link to="/books/add" className="text-sm text-accent underline">Find a book</Link>}>
-          You can also import your Goodreads library from Settings.
+        <EmptyState title={`Nothing in “${READING_STATUS_LABELS[status]}”`} action={<LinkButton to="/books/add" variant="secondary">Find a book</LinkButton>}>
+          You can also import your Goodreads library from <TextLink to="/settings?tab=import">Settings</TextLink>.
         </EmptyState>
       )}
       <ul className="grid gap-3 md:grid-cols-2">
         {items.map((b) => (
           <li key={b.id}>
-            <Card className="p-3">
+            <Card className="p-3 sm:p-4">
               <BookRow
                 edition={b.edition}
                 meta={
@@ -89,7 +90,7 @@ export function LibraryPage() {
         open={sharing}
         onClose={() => setSharing(false)}
         input={{ resourceType: "reading_list", status }}
-        label={`your “${READING_STATUS_LABELS[status]}” list (club-visible books only)`}
+        label={`your “${READING_STATUS_LABELS[status]}” list (books visible to your clubs only)`}
       />
     </div>
   );

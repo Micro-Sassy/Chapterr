@@ -10,7 +10,7 @@ import { parseGoodreadsCsv, type GoodreadsParseResult } from "@shared/goodreads"
 import { changeEmailSchema, changePasswordSchema, changeUsernameSchema, profileUpdateSchema } from "@shared/schemas";
 import type { ImportRecord, ImportResult, Me, NotificationPreferences, SessionInfo, ShareLink } from "@shared/types";
 import { Avatar } from "@/components/Avatar";
-import { Alert, Badge, Button, Card, Checkbox, EmptyState, Field, Input, PageHeader, SectionTitle, Select, Spinner, Tabs, Textarea } from "@/components/ui";
+import { Alert, Badge, Button, buttonClass, Card, Checkbox, EmptyState, Field, Input, PageHeader, SectionTitle, Select, Spinner, Tabs, Textarea } from "@/components/ui";
 import { useToast } from "@/components/ui/Toast";
 import { api, ApiRequestError, errorMessage } from "@/lib/api";
 import { sessionKey, useSignOut } from "@/lib/auth";
@@ -71,7 +71,7 @@ function ProfileTab({ me }: { me: Me }) {
     onSuccess: (data) => {
       qc.setQueryData(["me"], data);
       void qc.invalidateQueries({ queryKey: sessionKey });
-      toast("Profile saved");
+      toast("Profile saved.");
     },
     onError: (err) => applyFieldErrors(err, form.setError as never),
   });
@@ -81,7 +81,7 @@ function ProfileTab({ me }: { me: Me }) {
     onSuccess: (data) => {
       qc.setQueryData(["me"], data);
       void qc.invalidateQueries({ queryKey: sessionKey });
-      toast("Photo updated");
+      toast("Photo updated.");
     },
     onError: (err) => toast(errorMessage(err), "error"),
   });
@@ -93,7 +93,7 @@ function ProfileTab({ me }: { me: Me }) {
         <div className="space-y-2">
           <p className="text-sm font-medium">Profile photo</p>
           <div className="flex flex-wrap gap-2">
-            <label className="inline-flex h-8 cursor-pointer items-center gap-2 rounded-[var(--radius)] border border-line bg-surface px-3 text-sm font-medium hover:bg-surface-2">
+            <label className={buttonClass("secondary", "sm", "cursor-pointer")}>
               <Upload className="size-4" aria-hidden /> {avatar.isPending ? "Uploading…" : "Upload"}
               <input
                 type="file"
@@ -112,7 +112,7 @@ function ProfileTab({ me }: { me: Me }) {
               </Button>
             )}
           </div>
-          <p className="text-xs text-ink-muted">Visible to signed-in members only.</p>
+          <p className="text-xs text-ink-muted">Visible to members of your clubs only.</p>
         </div>
       </Card>
       <Card>
@@ -137,7 +137,7 @@ function ProfileTab({ me }: { me: Me }) {
           <Field label="Default visibility for new shelf entries" hint="You can change it per book.">
             {(id, d) => (
               <Select id={id} aria-describedby={d} {...form.register("defaultVisibility")}>
-                <option value="club">Club members</option>
+                <option value="club">Members of my clubs</option>
                 <option value="private">Only me</option>
               </Select>
             )}
@@ -164,7 +164,7 @@ function UsernameForm({ me }: { me: Me }) {
       qc.setQueryData(["me"], data);
       void qc.invalidateQueries({ queryKey: sessionKey });
       form.reset({ username: data.username, currentPassword: "" });
-      toast("Username changed");
+      toast("Username changed.");
     },
     onError: (err) => applyFieldErrors(err, form.setError as never),
   });
@@ -227,7 +227,7 @@ function PasswordForm() {
     mutationFn: (v: z.input<typeof changePasswordSchema>) => api("/api/account/password", { body: v }),
     onSuccess: () => {
       form.reset();
-      toast("Password changed");
+      toast("Password changed.");
     },
     onError: (err) => applyFieldErrors(err, form.setError as never),
   });
@@ -281,7 +281,7 @@ function NotificationsTab({ me }: { me: Me }) {
     mutationFn: () => api<Me>("/api/account/preferences", { method: "PUT", body: prefs }),
     onSuccess: (data) => {
       qc.setQueryData(["me"], data);
-      toast("Preferences saved");
+      toast("Preferences saved.");
     },
     onError: (err) => toast(errorMessage(err), "error"),
   });
@@ -294,12 +294,12 @@ function NotificationsTab({ me }: { me: Me }) {
         <SectionTitle>In the app</SectionTitle>
         {toggle("inappDirectMessages", "New direct messages")}
         {toggle("inappRecommendations", "Books recommended to me or the club")}
-        {toggle("inappClubUpdates", "New meetings and assignments")}
+        {toggle("inappClubUpdates", "Club updates: meetings, assignments, members joining")}
         {toggle("inappReactions", "Reactions to my reviews")}
       </div>
       <div className="space-y-2">
         <SectionTitle>By email</SectionTitle>
-        {toggle("emailClubUpdates", "Email me about new meetings and assignments")}
+        {toggle("emailClubUpdates", "Email me about club meetings and assignments")}
         {toggle("emailRecommendations", "Email me when someone recommends a book to me")}
         <p className="text-xs text-ink-muted">Security emails (verification, password resets) are always sent.</p>
       </div>
@@ -329,7 +329,7 @@ function SessionsTab() {
     mutationFn: (id: string) => api(`/api/account/sessions/${id}`, { method: "DELETE" }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["sessions"] });
-      toast("Session signed out");
+      toast("Session signed out.");
     },
   });
   const revokeOthers = useMutation({
@@ -357,7 +357,7 @@ function SessionsTab() {
             <Monitor className="size-5 text-ink-muted" aria-hidden />
             <div className="min-w-0 flex-1 text-sm">
               <p className="font-medium">
-                {describeAgent(s.userAgent)} {s.current && <Badge tone="accent">This device</Badge>}
+                {describeAgent(s.userAgent)} {s.current && <Badge tone="forest">This device</Badge>}
               </p>
               <p className="text-xs text-ink-muted">
                 Signed in {relativeTime(s.createdAt)}
@@ -398,7 +398,7 @@ function SharingTab() {
     mutationFn: (id: string) => api(`/api/shares/${id}`, { method: "DELETE" }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["shares"] });
-      toast("Link turned off");
+      toast("Link turned off.");
     },
   });
   const now = new Date().toISOString();
@@ -406,7 +406,7 @@ function SharingTab() {
     <Card className="space-y-4">
       <SectionTitle>Public share links</SectionTitle>
       <p className="text-sm text-ink-muted">
-        Links you created to share a review, quote or list outside the club. Turning a link off takes effect immediately. Messages can never be shared.
+        Links you created to share a review, quote or list with anyone. Turning a link off takes effect immediately. Messages can never be shared.
       </p>
       {q.isPending && <Spinner />}
       {q.data?.length === 0 && <EmptyState title="No share links">Use the share button on a review, quote or list to create one.</EmptyState>}
@@ -509,7 +509,7 @@ function ImportTab() {
           <li>Download the CSV file when it is ready.</li>
           <li>Choose that file below. Nothing is uploaded until you confirm.</li>
         </ol>
-        <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-[var(--radius)] border border-line bg-surface px-4 text-sm font-medium hover:bg-surface-2">
+        <label className={buttonClass("secondary", "md", "cursor-pointer")}>
           <FileUp className="size-4" aria-hidden /> Choose CSV file
           <input type="file" accept=".csv,text/csv" className="sr-only" onChange={(e) => void onFile(e.target.files?.[0])} />
         </label>
@@ -525,7 +525,7 @@ function ImportTab() {
               <Field label="Visibility of imported books">
                 {(id) => (
                   <Select id={id} value={visibility} onChange={(e) => setVisibility(e.target.value as "club" | "private")}>
-                    <option value="club">Club members</option>
+                    <option value="club">Members of my clubs</option>
                     <option value="private">Only me</option>
                   </Select>
                 )}
@@ -535,7 +535,7 @@ function ImportTab() {
               </div>
             </div>
             <p className="text-xs text-ink-muted">
-              Star ratings map to the five review feelings (5★ loved it … 1★ really disliked it). Private notes stay private. Existing reviews in the app are
+              Star ratings map to the five review feelings (5 stars loved it, 1 star really disliked it). Private notes stay private. Existing reviews in the app are
               never overwritten.
             </p>
             {progress ? (
@@ -604,15 +604,15 @@ function DataTab() {
       <Card className="space-y-3">
         <SectionTitle>Download my data</SectionTitle>
         <p className="text-sm text-ink-muted">A JSON file with your profile, library, reviews, quotes, goals, recommendations and messages you sent.</p>
-        <a href="/api/account/export" download className="inline-flex h-10 items-center gap-2 rounded-[var(--radius)] border border-line bg-surface px-4 text-sm font-medium hover:bg-surface-2">
+        <a href="/api/account/export" download className={buttonClass("secondary")}>
           <Download className="size-4" aria-hidden /> Download
         </a>
       </Card>
-      <Card className="space-y-3 border-danger/40">
+      <Card className="space-y-3 border-error/40">
         <SectionTitle>Delete my account</SectionTitle>
         <p className="text-sm text-ink-muted">
           Permanently deletes your account, library, reviews, quotes, goals, recommendations and messages. Shared club records you created (such as
-          meetings) remain for the club without your name. This cannot be undone.
+          meetings) remain for their clubs without your name. Clubs you own must be transferred or deleted first. This cannot be undone.
         </p>
         <Field label="Current password">{(id) => <Input id={id} type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />}</Field>
         <Field label='Type "DELETE" to confirm'>{(id) => <Input id={id} value={confirmText} onChange={(e) => setConfirmText(e.target.value)} />}</Field>
@@ -632,7 +632,7 @@ export function SettingsPage() {
   const me = useMe();
   return (
     <div>
-      <PageHeader title="Settings" />
+      <PageHeader eyebrow="You" title="Account settings" />
       <Tabs
         label="Settings sections"
         value={tab}

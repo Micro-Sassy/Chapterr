@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { CalendarDays, ClipboardList, KeyRound, MessageCircle, Plus, Users } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link, Navigate } from "react-router";
 import type { ClubCard as ClubCardData, HomeData } from "@shared/types";
 import { RoleChip } from "@/components/AppShell";
@@ -65,10 +65,6 @@ export function HomePage() {
   const [pendingJoin] = useState(takePendingJoin);
   const q = useQuery({ queryKey: ["home"], queryFn: () => api<HomeData>(`/api/home?today=${todayIso()}`) });
   const year = new Date().getFullYear();
-
-  useEffect(() => {
-    document.title = "Home · Chapterr";
-  }, []);
 
   // A join link opened while signed out resumes here.
   if (pendingJoin) return <Navigate to={`/join/${encodeURIComponent(pendingJoin)}`} replace />;

@@ -137,6 +137,47 @@ export function as(member: Member) {
   return (path: string, opts: CallOptions = {}) => call(path, { ...opts, cookie: member.cookie, ip: member.ip });
 }
 
+export interface TestClub {
+  id: string;
+  name: string;
+  slug: string;
+}
+
+/** Create a club owned by `owner` (Turnstile is stubbed by installFetchMock). */
+export async function createClub(owner: Member, name = "Test Club"): Promise<TestClub> {
+  const res = await as(owner)("/api/clubs", { body: { name }, headers: { "x-turnstile-token": "ok" } });
+  if (res.status !== 201) throw new Error(`create club failed ${res.status}: ${await res.text()}`);
+  const club = await json<TestClub>(res);
+  return { id: club.id, name: club.name, slug: club.slug };
+}
+
+/** Create an invite link as an admin/owner and return its code. */
+export async function createInvite(admin: Member, clubId: string, body: Record<string, unknown> = {}): Promise<{ id: string; code: string; url: string }> {
+  const res = await as(admin)(`/api/clubs/${clubId}/invites`, { body });
+  if (res.status !== 201) throw new Error(`create invite failed ${res.status}: ${await res.text()}`);
+  return json(res);
+}
+
+/** Join a club with an invite code. */
+export async function joinClub(member: Member, code: string): Promise<Response> {
+  return as(member)("/api/clubs/join", { body: { code }, headers: { "x-turnstile-token": "ok" } });
+}
+
+/** Add `member` to `club` through a fresh invite from `admin`. */
+export async function addToClub(admin: Member, club: TestClub, member: Member): Promise<void> {
+  const invite = await createInvite(admin, club.id);
+  const res = await joinClub(member, invite.code);
+  if (res.status !== 201 && res.status !== 200) throw new Error(`join failed ${res.status}: ${await res.text()}`);
+}
+
+/** Id of the club's main conversation. */
+export async function mainConversation(member: Member, clubId: string): Promise<string> {
+  const list = await json<{ id: string; kind: string }[]>(await as(member)(`/api/clubs/${clubId}/conversations`));
+  const main = list.find((c) => c.kind === "club");
+  if (!main) throw new Error("no club conversation");
+  return main.id;
+}
+
 export async function seedEdition(title = "The Test Book", isbn13: string | null = null): Promise<string> {
   const id = `ed_${Math.random().toString(36).slice(2, 12)}`;
   const bookId = `bk_${Math.random().toString(36).slice(2, 12)}`;

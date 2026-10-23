@@ -125,7 +125,8 @@ describe("sign in", () => {
   it("rejects private API calls without a session", async () => {
     expect((await call("/api/account/me")).status).toBe(401);
     expect((await call("/api/library")).status).toBe(401);
-    expect((await call("/api/conversations")).status).toBe(401);
+    expect((await call("/api/clubs")).status).toBe(401);
+    expect((await call("/api/home")).status).toBe(401);
   });
 
   it("blocks Better Auth endpoints that would bypass password confirmation", async () => {

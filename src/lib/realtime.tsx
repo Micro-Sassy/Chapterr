@@ -12,8 +12,8 @@ export function useRealtimeStatus(): Status {
 }
 
 /**
- * Merge a created/updated message into the cached first page of its
- * conversation (newest first), if that page is loaded.
+ * Merge a created/updated message into the cached live page of its
+ * conversation (chronological order within the page), if that page is loaded.
  */
 export function applyMessageEvent(qc: QueryClient, message: Message) {
   qc.setQueryData<Page<Message>>(["messages", message.conversationId], (prev) => {
@@ -24,7 +24,7 @@ export function applyMessageEvent(qc: QueryClient, message: Message) {
       items[idx] = message;
       return { ...prev, items };
     }
-    return { ...prev, items: [message, ...prev.items] };
+    return { ...prev, items: [...prev.items, message] };
   });
 }
 

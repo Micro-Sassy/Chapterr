@@ -9,11 +9,11 @@ const file = (variant: Variant, ground: "light" | "dark") => `${BASE}/${variant 
 
 /** The forced theme (data-theme on <html>), if any. */
 function useForcedTheme(): "light" | "dark" | null {
-  const read = () => {
+  const read = (): "light" | "dark" | null => {
     const t = typeof document === "undefined" ? null : document.documentElement.dataset.theme;
     return t === "light" || t === "dark" ? t : null;
   };
-  const [theme, setTheme] = useState(read);
+  const [theme, setTheme] = useState<"light" | "dark" | null>(read);
   useEffect(() => {
     const observer = new MutationObserver(() => setTheme(read()));
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });

@@ -3,11 +3,11 @@ import { MailCheck } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
-import { Link, useNavigate, useSearchParams } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import type { z } from "zod";
 import { forgotPasswordSchema, resetPasswordSchema } from "@shared/schemas";
 import { Turnstile, type TurnstileHandle } from "@/components/Turnstile";
-import { Alert, Button, Field, Input } from "@/components/ui";
+import { Alert, Button, Field, Input, LinkButton, TextLink } from "@/components/ui";
 import { errorMessage } from "@/lib/api";
 import { requestPasswordReset, resendVerification, resetPassword, sessionKey } from "@/lib/auth";
 import { AuthLayout } from "./AuthLayout";
@@ -32,7 +32,7 @@ export function ForgotPasswordPage() {
   });
 
   return (
-    <AuthLayout title="Reset your password" footer={<Link className="text-accent underline" to="/sign-in">Back to sign in</Link>}>
+    <AuthLayout title="Reset your password" footer={<TextLink to="/sign-in">Back to sign in</TextLink>}>
       {sent ? (
         <Alert tone="success" title="Check your email">
           If an account exists for that address, we sent a link to reset the password. The link expires in one hour.
@@ -74,13 +74,13 @@ export function ResetPasswordPage() {
 
   if (!token || linkError) {
     return (
-      <AuthLayout title="Link expired" footer={<Link className="text-accent underline" to="/forgot-password">Request a new link</Link>}>
+      <AuthLayout title="Link expired" footer={<TextLink to="/forgot-password">Request a new link</TextLink>}>
         <Alert tone="error">This password reset link is invalid or has expired. Please request a new one.</Alert>
       </AuthLayout>
     );
   }
   return (
-    <AuthLayout title="Choose a new password" subtitle="You will be signed out on all devices afterwards.">
+    <AuthLayout title="Choose a new password" subtitle="You will be signed out on every device afterwards.">
       <form onSubmit={onSubmit} className="space-y-4" noValidate>
         <Field label="New password" error={form.formState.errors.password?.message}>
           {(id, d) => <Input id={id} aria-describedby={d} type="password" autoComplete="new-password" {...form.register("password")} />}
@@ -106,9 +106,9 @@ export function CheckEmailPage() {
   const [busy, setBusy] = useState(false);
 
   return (
-    <AuthLayout title="Confirm your email" footer={<Link className="text-accent underline" to="/sign-in">Go to sign in</Link>}>
+    <AuthLayout title="Confirm your email" footer={<TextLink to="/sign-in">Go to sign in</TextLink>}>
       <div className="flex flex-col items-center text-center">
-        <MailCheck className="mb-3 size-10 text-accent" aria-hidden />
+        <MailCheck className="mb-3 size-10 text-ink-muted" aria-hidden strokeWidth={1.5} />
         <p className="text-sm">
           We sent a confirmation link to <strong>{email || "your email address"}</strong>. Open it to activate your account.
         </p>
@@ -158,12 +158,12 @@ export function VerifiedPage() {
       {error ? (
         <Alert tone="error">This confirmation link is invalid or has expired. Sign in to receive a fresh one.</Alert>
       ) : (
-        <Alert tone="success">Thanks! Your email address is confirmed.</Alert>
+        <Alert tone="success">Your email address is confirmed. Welcome to Chapterr.</Alert>
       )}
       <div className="mt-6">
-        <Link to={error ? "/sign-in" : "/"} className="inline-flex h-10 w-full items-center justify-center rounded-[var(--radius)] bg-accent px-4 text-sm font-medium text-on-accent">
-          {error ? "Go to sign in" : "Open the book club"}
-        </Link>
+        <LinkButton to={error ? "/sign-in" : "/"} className="w-full">
+          {error ? "Go to sign in" : "Open Chapterr"}
+        </LinkButton>
       </div>
     </AuthLayout>
   );
