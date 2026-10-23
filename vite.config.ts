@@ -32,15 +32,13 @@ export default defineConfig({
         // worker, so member data never lingers in Cache Storage on shared devices.
         runtimeCaching: [
           {
-            urlPattern: ({ url }) =>
-              url.origin === "https://covers.openlibrary.org" ||
-              url.hostname.endsWith("books.google.com") ||
-              url.hostname.endsWith("googleusercontent.com"),
+            // Covers are proxied through our own origin (worker/routes/covers.ts).
+            urlPattern: ({ url, sameOrigin }) => sameOrigin && url.pathname === "/api/public/covers",
             handler: "CacheFirst",
             options: {
               cacheName: "book-covers",
               expiration: { maxEntries: 400, maxAgeSeconds: 60 * 60 * 24 * 30 },
-              cacheableResponse: { statuses: [0, 200] },
+              cacheableResponse: { statuses: [200] },
             },
           },
         ],

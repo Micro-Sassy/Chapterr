@@ -22,18 +22,34 @@ export function searchText(e: { title: string; subtitle: string | null; authors:
 }
 
 /**
- * Links that help a member find this exact edition at retailers or libraries.
- * These are plain search URLs built from the ISBN — no scraping, no affiliate APIs.
+ * Links that help a member find this edition at retailers or libraries.
+ * Plain URLs only — no scraping, no affiliate APIs.
+ *
+ * Retail sites index books by title far more reliably than by ISBN-13 (Amazon
+ * often returns "no results" for a bare ISBN, Bookshop for less common
+ * editions), so the shop links search by title and author. Catalogue sites
+ * that resolve ISBNs exactly (GetTextbooks, WorldCat, Open Library, Google
+ * Books) get the ISBN.
  */
 export function retailerLinks(isbn13: string | null, title: string, authors: string[]): { label: string; url: string }[] {
-  const q = encodeURIComponent(isbn13 ?? `${title} ${authors[0] ?? ""}`.trim());
+  const q = encodeURIComponent(`${title} ${authors[0] ?? ""}`.trim());
   const links = [
-    { label: "Amazon", url: `https://www.amazon.com/s?k=${q}` },
+    { label: "Amazon", url: `https://www.amazon.com/s?k=${q}&i=stripbooks` },
     { label: "Bookshop.org", url: `https://bookshop.org/search?keywords=${q}` },
-    { label: "WorldCat (libraries)", url: `https://search.worldcat.org/search?q=${isbn13 ? `bn:${isbn13}` : q}` },
-    { label: "Open Library", url: `https://openlibrary.org/search?q=${q}` },
   ];
-  if (isbn13) links.splice(1, 0, { label: "GetTextbooks", url: `https://www.gettextbooks.com/isbn/${isbn13}/` });
+  if (isbn13) {
+    links.push(
+      { label: "GetTextbooks (compare prices)", url: `https://www.gettextbooks.com/isbn/${isbn13}/` },
+      { label: "WorldCat (libraries)", url: `https://search.worldcat.org/isbn/${isbn13}` },
+      { label: "Google Books", url: `https://books.google.com/books?vid=ISBN${isbn13}` },
+      { label: "Open Library", url: `https://openlibrary.org/isbn/${isbn13}` },
+    );
+  } else {
+    links.push(
+      { label: "WorldCat (libraries)", url: `https://search.worldcat.org/search?q=${q}` },
+      { label: "Open Library", url: `https://openlibrary.org/search?q=${q}` },
+    );
+  }
   return links;
 }
 

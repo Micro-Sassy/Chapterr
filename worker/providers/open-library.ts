@@ -26,6 +26,11 @@ export function openLibraryCover(coverId: number | undefined | null, size: "M" |
   return coverId && coverId > 0 ? `https://covers.openlibrary.org/b/id/${coverId}-${size}.jpg` : null;
 }
 
+/** Open Library can also look a cover up by ISBN; `default=false` makes a miss a 404 instead of a blank image. */
+export function openLibraryIsbnCover(isbn13: string | null | undefined, size: "M" | "L" = "M"): string | null {
+  return isbn13 ? `https://covers.openlibrary.org/b/isbn/${isbn13}-${size}.jpg?default=false` : null;
+}
+
 export function mapOpenLibraryFormat(value: string | undefined | null): BookFormat {
   const v = (value ?? "").toLowerCase();
   if (!v) return "unknown";
@@ -101,7 +106,7 @@ export async function searchOpenLibrary(query: string, appUrl: string): Promise<
       isbn13: i13?.isbn13 ?? null,
       isbn10: i13?.isbn10 ?? null,
       pageCount: null,
-      coverUrl: openLibraryCover(ed.cover_i ?? doc.cover_i),
+      coverUrl: openLibraryCover(ed.cover_i ?? doc.cover_i) ?? openLibraryIsbnCover(i13?.isbn13),
       format: mapOpenLibraryFormat(ed.format?.[0]),
     });
   }
@@ -180,8 +185,8 @@ async function normalizeEdition(ed: OLEdition, appUrl: string): Promise<Normaliz
     format: mapOpenLibraryFormat(ed.physical_format),
     language: clip(lang, 20),
     description: clip(text(ed.description) ?? text(work?.description), 10_000),
-    coverUrl: openLibraryCover(coverId, "M"),
-    coverUrlLarge: openLibraryCover(coverId, "L"),
+    coverUrl: openLibraryCover(coverId, "M") ?? openLibraryIsbnCover(n13.isbn13 ?? n10.isbn13, "M"),
+    coverUrlLarge: openLibraryCover(coverId, "L") ?? openLibraryIsbnCover(n13.isbn13 ?? n10.isbn13, "L"),
     googleBooksId: null,
     openLibraryId: ed.key.replace("/books/", ""),
     openLibraryWorkId: workKey ? workKey.replace("/works/", "") : null,

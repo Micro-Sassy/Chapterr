@@ -1,6 +1,6 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { parseGoodreadsCsv } from "../../shared/goodreads";
-import { as, createMember, installFetchMock, json, type Member } from "./helpers";
+import { as, call, createMember, installFetchMock, json, type Member } from "./helpers";
 
 let alice: Member;
 
@@ -177,5 +177,27 @@ describe("fast add from a search result", () => {
     const again = await as(alice)("/api/books/editions/provider", { body: { provider: "open_library", providerId: "OL88888888M", hint: { title: "Dup", authors: ["A"] } } });
     expect(again.status).toBe(200);
     expect((await json(again)).id).toBe(first.id);
+  });
+});
+
+describe("cover proxy", () => {
+  it("serves images from the catalogue sites through our origin and refuses everything else", async () => {
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
+    installFetchMock((url) => {
+      if (url.startsWith("https://covers.openlibrary.org/b/id/1-M.jpg")) {
+        return new Response(png, { status: 200, headers: { "content-type": "image/png", "content-length": String(png.length) } });
+      }
+      if (url.startsWith("https://example.com/page.html")) return new Response("<html>", { status: 200, headers: { "content-type": "text/html" } });
+      return undefined;
+    });
+    const ok = await call(`/api/public/covers?u=${encodeURIComponent("https://covers.openlibrary.org/b/id/1-M.jpg")}`, { origin: null });
+    expect(ok.status).toBe(200);
+    expect(ok.headers.get("content-type")).toBe("image/png");
+    expect(ok.headers.get("cache-control")).toContain("max-age");
+    expect((await ok.arrayBuffer()).byteLength).toBe(png.length);
+
+    expect((await call(`/api/public/covers?u=${encodeURIComponent("https://example.com/page.html")}`, { origin: null })).status).toBe(404);
+    expect((await call(`/api/public/covers?u=${encodeURIComponent("http://covers.openlibrary.org/b/id/1-M.jpg")}`, { origin: null })).status).toBe(400);
+    expect((await call("/api/public/covers", { origin: null })).status).toBe(400);
   });
 });

@@ -21,6 +21,7 @@ import { memberRoutes } from "./routes/members";
 import { conversationRoutes, messageRoutes, realtimeUpgrade } from "./routes/messages";
 import { notificationRoutes } from "./routes/notifications";
 import { clubQuoteRoutes, clubReviewRoutes, goalRoutes, libraryRoutes, quoteRoutes, recommendationRoutes, reviewRoutes } from "./routes/personal";
+import { coverRoutes } from "./routes/covers";
 import { publicRoutes, shareRoutes } from "./routes/shares";
 import { purgeRateLimits } from "./security/rate-limit";
 import { requireHttps, sameOriginGuard, securityHeaders } from "./security/headers";
@@ -59,6 +60,7 @@ app.get("/api/config", (c) => {
 
 app.route("/api/auth", authRoutes);
 app.route("/api/public", publicRoutes);
+app.route("/api/public/covers", coverRoutes);
 // Invite preview works signed out (the join page is where new members land).
 app.get("/api/invites/:code", invitePreview);
 

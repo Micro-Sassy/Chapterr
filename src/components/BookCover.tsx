@@ -1,13 +1,15 @@
 import clsx from "clsx";
 import { BookOpen } from "lucide-react";
 import { useState } from "react";
+import { coverSrc } from "@/lib/covers";
 
 const sizes = { xs: "w-8 h-12", sm: "w-12 h-18", md: "w-20 h-30", lg: "w-32 h-48" };
 
 /** Book covers: 1px Thread border, 4px radius, never reflections (§5). */
 export function BookCover({ url, title, size = "sm", className }: { url: string | null; title: string; size?: keyof typeof sizes; className?: string }) {
   const [failed, setFailed] = useState(false);
-  if (!url || failed) {
+  const src = coverSrc(url);
+  if (!src || failed) {
     return (
       <div
         aria-hidden
@@ -26,7 +28,7 @@ export function BookCover({ url, title, size = "sm", className }: { url: string 
   }
   return (
     <img
-      src={url}
+      src={src}
       alt={`Cover of ${title}`}
       loading="lazy"
       referrerPolicy="no-referrer"
