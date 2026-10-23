@@ -23,7 +23,7 @@ export default defineConfig(async () => {
             PUBLIC_APP_URL: "http://localhost",
             BETTER_AUTH_SECRET: "test-secret-that-is-long-enough-for-better-auth-0123456789",
             EMAIL_PROVIDER: "console",
-            EMAIL_FROM: "Teel Ridge Book Club <test@example.com>",
+            EMAIL_FROM: "Chapterr <test@example.com>",
             TURNSTILE_SITE_KEY: "1x00000000000000000000AA",
             TURNSTILE_SECRET_KEY: "1x0000000000000000000000000000000AA",
             TEST_MIGRATIONS: migrations,

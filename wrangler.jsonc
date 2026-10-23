@@ -27,7 +27,7 @@
   },
 
   // D1 database. Replace database_id with the ID printed by
-  //   npx wrangler d1 create teel-ridge-book-club
+  //   npx wrangler d1 create chapterr
   // (also shown in Cloudflare dashboard → Storage & Databases → D1).
   "d1_databases": [
     {

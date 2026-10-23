@@ -6,7 +6,7 @@ const BASE = "https://openlibrary.org";
 
 function headers(appUrl: string) {
   // Open Library asks API clients to identify themselves.
-  return { Accept: "application/json", "User-Agent": `TeelRidgeBookClub/1.0 (+${appUrl})` };
+  return { Accept: "application/json", "User-Agent": `Chapterr/1.0 (+${appUrl})` };
 }
 
 async function call<T>(url: string, appUrl: string): Promise<T> {

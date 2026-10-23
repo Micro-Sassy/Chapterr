@@ -124,9 +124,11 @@ function InvitesTab({ club }: { club: Club }) {
     },
     onError: (err) => toast(errorMessage(err), "error"),
   });
+  // Snapshot "now" once per mount so render stays pure.
+  const [now] = useState(() => Date.now());
   const status = (i: ClubInvite) => {
     if (i.revokedAt) return "revoked";
-    if (i.expiresAt && new Date(i.expiresAt).getTime() < Date.now()) return "expired";
+    if (i.expiresAt && new Date(i.expiresAt).getTime() < now) return "expired";
     if (i.maxUses && i.useCount >= i.maxUses) return "used up";
     return "active";
   };

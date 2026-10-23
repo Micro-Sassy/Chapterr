@@ -53,11 +53,30 @@ describe("SignInPage", () => {
     await userEvent.type(screen.getByLabelText("Email or username"), "me@example.com");
     await userEvent.type(screen.getByLabelText("Password"), "whatever pw");
     await userEvent.click(screen.getByRole("button", { name: "Sign in" }));
-    expect(await screen.findByText("Please confirm your email first")).toBeInTheDocument();
+    expect(await screen.findByText("Confirm your email first")).toBeInTheDocument();
+  });
+
+  it("lands on the last club when no next path was requested", async () => {
+    mockFetch({
+      "POST /api/auth/sign-in/username": () => ({ json: { token: "x" } }),
+      "GET /api/auth/get-session": () => ({ json: null }),
+      "GET /api/account/me": () => ({ json: { lastClubId: "c2", clubs: [{ id: "c1" }, { id: "c2" }] } }),
+    });
+    const { router } = renderRoutes(
+      [
+        { path: "/sign-in", element: <SignInPage /> },
+        { path: "/c/:clubId", element: <p>Club page</p> },
+      ],
+      "/sign-in",
+    );
+    await userEvent.type(screen.getByLabelText("Email or username"), "reader");
+    await userEvent.type(screen.getByLabelText("Password"), "secret password");
+    await userEvent.click(screen.getByRole("button", { name: "Sign in" }));
+    await waitFor(() => expect(router.state.location.pathname).toBe("/c/c2"));
   });
 
   it("only allows relative redirect targets", () => {
-    expect(safeNext("/club")).toBe("/club");
+    expect(safeNext("/c/abc")).toBe("/c/abc");
     expect(safeNext("//evil.example")).toBe("/");
     expect(safeNext("https://evil.example")).toBe("/");
     expect(safeNext(null)).toBe("/");
