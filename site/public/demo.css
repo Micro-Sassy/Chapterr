@@ -1,6 +1,7 @@
 /* Chapterr marketing site — styles for the interactive demo that runs inside
    the hero phone. The demo is laid out at 300 virtual px wide and scaled to
-   the phone screen with --k (set by demo.js). Everything is scoped to .demo
+   the phone screen with --k (set by demo.js). Tap targets are 50 virtual px so they
+   render at 40 px or more at the scales the hero phone uses (about 0.76–0.8). Everything is scoped to .demo
    so the page's own styles never leak in. Mirrors the app's design tokens. */
 
 .demo {
@@ -25,7 +26,7 @@
 
   position: absolute;
   left: 0; top: 0;
-  width: 300px;
+  width: 280px;
   height: var(--vh);
   transform: scale(var(--k));
   transform-origin: 0 0;
@@ -117,7 +118,7 @@
 .d-back { margin-left: -8px; }
 .d-icon-btn {
   position: relative;
-  width: 40px; height: 40px;
+  width: 50px; height: 50px;
   display: inline-flex; align-items: center; justify-content: center;
   border-radius: 12px; color: var(--d-ink); flex: none;
 }
@@ -131,7 +132,7 @@
 }
 .d-club-switch {
   display: flex; align-items: center; gap: 8px;
-  min-height: 44px; padding: 4px 8px 4px 4px; margin-left: -4px;
+  min-height: 50px; padding: 4px 8px 4px 4px; margin-left: -4px;
   border-radius: 12px; min-width: 0; flex: 1;
 }
 .d-club-switch:hover { background: var(--d-surface); }
@@ -139,6 +140,7 @@
 .d-club-switch-text strong { font-family: "Fraunces", "Iowan Old Style", Georgia, serif; font-weight: 600; font-size: 17px; line-height: 1.15; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .d-club-switch-text small { font-size: 11px; color: var(--d-muted); }
 .d-club-switch > svg { color: var(--d-muted); width: 16px; height: 16px; }
+.d-top .d-btn--sm { min-height: 44px; }
 
 /* Club marks (three spines, three tones) */
 .d-club-mark {
@@ -173,7 +175,7 @@
 .d-progress-row span { color: var(--d-muted); }
 .d-progress { height: 4px; border-radius: 2px; background: var(--d-track); overflow: hidden; }
 .d-progress-fill { display: block; height: 100%; width: 0; background: var(--d-brass); border-radius: 2px; transition: width 420ms cubic-bezier(.3,.7,.2,1); }
-.d-textbtn { align-self: flex-start; color: var(--d-ink); font-weight: 600; font-size: 12px; text-decoration: underline; text-underline-offset: 3px; min-height: 32px; display: inline-flex; align-items: center; }
+.d-textbtn { align-self: flex-start; color: var(--d-ink); font-weight: 600; font-size: 12px; text-decoration: underline; text-underline-offset: 3px; min-height: 50px; margin: -10px 0 -12px; display: inline-flex; align-items: center; }
 
 /* Book rows and covers */
 .d-bookrow { display: flex; gap: 12px; align-items: flex-start; }
@@ -206,7 +208,7 @@
 .d-clubs { display: flex; flex-direction: column; gap: 8px; }
 .d-club {
   display: flex; align-items: center; gap: 10px;
-  width: 100%; min-height: 56px; padding: 8px 10px 8px 10px;
+  width: 100%; min-height: 60px; padding: 8px 10px 8px 10px;
   background: var(--d-surface); border: 1px solid var(--d-border); border-radius: 18px;
 }
 .d-club:hover { border-color: var(--d-muted); }
@@ -218,7 +220,7 @@
 .d-schedule { display: flex; flex-direction: column; margin-top: 2px; }
 .d-sched {
   display: flex; align-items: center; gap: 10px;
-  width: 100%; min-height: 40px; padding: 4px 2px;
+  width: 100%; min-height: 50px; padding: 4px 2px;
   border-top: 1px solid var(--d-border);
 }
 .d-sched span:nth-child(2) { flex: 1; font-weight: 500; }
@@ -239,7 +241,7 @@
 .d-notifs { background: var(--d-surface); border: 1px solid var(--d-border); border-radius: 18px; padding: 12px 14px; gap: 12px; }
 .d-links { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; flex: none; }
 .d-link {
-  display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 12px;
+  display: flex; align-items: center; gap: 8px; min-height: 50px; padding: 0 12px;
   background: var(--d-surface); border: 1px solid var(--d-border); border-radius: 12px; font-weight: 600; font-size: 12px;
 }
 .d-link small { margin-left: auto; color: var(--d-muted); font-weight: 500; }
@@ -254,7 +256,7 @@
 /* Shelf */
 .d-tabs { display: flex; gap: 4px; padding: 3px; background: var(--d-surface-2); border: 1px solid var(--d-border); border-radius: 12px; flex: none; }
 .d-tabs [role="tab"] {
-  flex: 1; min-height: 36px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+  flex: 1; min-height: 44px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; gap: 5px;
   font-size: 11px; font-weight: 600; color: var(--d-muted);
 }
 .d-tabs [role="tab"] span { font-weight: 500; opacity: 0.8; }
@@ -268,7 +270,7 @@
 
 /* Members */
 .d-members { display: flex; flex-direction: column; gap: 6px; }
-.d-member { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 56px; padding: 6px 10px; background: var(--d-surface); border: 1px solid var(--d-border); border-radius: 18px; }
+.d-member { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 60px; padding: 6px 10px; background: var(--d-surface); border: 1px solid var(--d-border); border-radius: 18px; }
 .d-member:hover { border-color: var(--d-muted); }
 .d-member-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .d-member-text strong { font-size: 13px; }
@@ -322,19 +324,19 @@
   background: var(--d-ground);
 }
 .d-input {
-  flex: 1; min-width: 0; min-height: 40px; padding: 0 14px;
+  flex: 1; min-width: 0; min-height: 50px; padding: 0 14px;
   border-radius: 12px; border: 1px solid var(--d-border); background: var(--d-surface);
   font: inherit; font-size: 13px; color: var(--d-ink);
 }
 .d-input::placeholder { color: var(--d-muted); }
 .d-input:focus { outline: 2px solid var(--d-ink); outline-offset: 0; border-color: var(--d-ink); }
-.d-send { flex: none; width: 40px; height: 40px; border-radius: 12px; background: var(--d-primary); color: var(--d-on-primary); display: inline-flex; align-items: center; justify-content: center; }
+.d-send { flex: none; width: 50px; height: 50px; border-radius: 12px; background: var(--d-primary); color: var(--d-on-primary); display: inline-flex; align-items: center; justify-content: center; }
 .d-send:hover { background: var(--d-primary-hov); }
 
 /* Buttons */
 .d-btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-  min-height: 40px; padding: 0 14px; border-radius: 12px;
+  min-height: 50px; padding: 0 14px; border-radius: 12px;
   font-size: 13px; font-weight: 600; border: 1px solid transparent; white-space: nowrap; flex: none;
 }
 .d-btn svg { width: 16px; height: 16px; }
@@ -342,14 +344,14 @@
 .d-btn--primary:hover { background: var(--d-primary-hov); border-color: var(--d-primary-hov); }
 .d-btn--secondary { background: var(--d-surface); color: var(--d-ink); border-color: var(--d-border); }
 .d-btn--secondary:hover { border-color: var(--d-muted); }
-.d-btn--sm { min-height: 36px; padding: 0 12px; font-size: 12px; }
+.d-btn--sm { min-height: 50px; padding: 0 12px; font-size: 12px; }
 .d-btn--block { width: 100%; }
 .d-row { display: flex; gap: 8px; }
 .d-row .d-btn { flex: 1; }
 
 /* Settings */
 .d-settings { display: flex; flex-direction: column; background: var(--d-surface); border: 1px solid var(--d-border); border-radius: 18px; overflow: hidden; }
-.d-setting { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 50px; padding: 6px 14px; border-top: 1px solid var(--d-border); }
+.d-setting { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 56px; padding: 6px 14px; border-top: 1px solid var(--d-border); }
 .d-settings li:first-child .d-setting { border-top: 0; }
 .d-setting:hover { background: var(--d-surface-2); }
 .d-setting > svg { color: var(--d-muted); }
@@ -369,7 +371,7 @@
 .d-tabbar button {
   position: relative;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
-  min-height: 48px; border-radius: 10px; font-size: 10px; font-weight: 600; color: var(--d-muted);
+  min-height: 54px; border-radius: 10px; font-size: 10px; font-weight: 600; color: var(--d-muted);
 }
 .d-tabbar button svg { width: 20px; height: 20px; }
 .d-tabbar button[aria-current="page"] { color: var(--d-ink); }
@@ -388,7 +390,7 @@
 }
 .d-sheet::before { content: ""; width: 36px; height: 4px; border-radius: 2px; background: var(--d-border); align-self: center; margin: -6px 0 2px; }
 .d-sheet .d-label { margin-bottom: 0; padding-right: 36px; }
-.d-sheet-close { position: absolute; right: 8px; top: 8px; width: 36px; height: 36px; }
+.d-sheet-close { position: absolute; right: 6px; top: 6px; }
 .d-code { font-family: ui-monospace, "JetBrains Mono", SFMono-Regular, Menlo, monospace; font-size: 20px; letter-spacing: 0.08em; text-align: center; padding: 12px; border: 1px dashed var(--d-brass); border-radius: 12px; background: var(--d-surface-2); }
 @media (prefers-reduced-motion: no-preference) {
   .d-sheet { animation: d-sheet-in 220ms cubic-bezier(.2,.7,.2,1); }

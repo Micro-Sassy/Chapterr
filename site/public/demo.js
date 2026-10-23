@@ -4,7 +4,7 @@
 (function () {
   "use strict";
 
-  var VW = 300; /* the demo is laid out at 300 virtual px wide and scaled to the phone screen */
+  var VW = 280; /* the demo is laid out at 280 virtual px wide and scaled to the phone screen */
   var reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   function esc(s) {

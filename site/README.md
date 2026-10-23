@@ -17,8 +17,12 @@ site/
     ├── privacy.html        Privacy notice      → served at /privacy
     ├── terms.html          Terms of service    → served at /terms
     ├── 404.html            Not-found page
-    ├── styles.css          All styles (brand tokens at the top)
-    ├── site.js             Mobile menu, scroll reveal, header hairline
+    ├── styles.css          All page styles (brand tokens at the top)
+    ├── demo.css            Styles for the interactive demo inside the hero phone
+    ├── nojs.css            Loaded via <noscript>: hides the preloader/video/phone
+    ├── site.js             Preloader, overlay menu, reveal, parallax, book→phone handoff
+    ├── demo.js             The in-phone demo (seed data, screens, chat, tour) + switch-club strip
+    ├── 3d/                 Book/phone renders and the book-to-phone video (webm + mp4 + poster + last frame)
     ├── _headers            Security + caching headers (CSP, HSTS, …)
     ├── robots.txt, sitemap.xml
     ├── favicon.svg, favicon.png, og-image.png (1200×630)
@@ -75,8 +79,15 @@ Cloudflare account; Cloudflare manages the DNS records and certificates).
   marks; buttons are verbs of at most two words.
 - Dark mode follows `prefers-color-scheme` (Deep Forest ground, Forest cards,
   Linen text, Brass unchanged). Logo variants swap through `<picture>`.
-- Keep JavaScript in `site.js`. The CSP in `_headers` has no `unsafe-inline`,
-  so inline `<script>` or `style=""` attributes will be blocked. (JSON-LD data
-  blocks are fine; they are not executed.)
+- Keep JavaScript in `site.js` and `demo.js`. The CSP in `_headers` has no
+  `unsafe-inline`, so inline `<script>` or `style=""` attributes will be blocked.
+  (JSON-LD data blocks are fine; they are not executed. Setting styles from JS
+  through the CSSOM, e.g. `el.style.width`, is allowed.)
+- The hero plays `3d/book-to-phone.webm` (then `.mp4`) once; on `ended`, `site.js`
+  computes a CSS `matrix3d` that maps the CSS phone's screen onto the phone screen
+  in the video's final frame (corner fractions in `QUAD`, measured on
+  `3d/book-to-phone-last.png`), cross-fades, then settles the phone front-facing.
+  If autoplay is blocked, the file is missing, or the visitor prefers reduced
+  motion, the phone appears immediately.
 - The product mockups are built in HTML/CSS and marked `aria-hidden`; the
   real content is in the surrounding copy.

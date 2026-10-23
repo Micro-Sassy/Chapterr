@@ -170,6 +170,8 @@
     var sources = video.querySelectorAll("source");
     if (sources.length) sources[sources.length - 1].addEventListener("error", fail);
     video.addEventListener("error", fail);
+    /* The sources may already have failed (404) before this deferred script ran. */
+    if (video.networkState === 3 /* NETWORK_NO_SOURCE */ || video.error) { goLive(false); return; }
     video.addEventListener("playing", function () {
       if (state !== "playing") return;
       started = true; videoPlayed = true;
@@ -182,7 +184,7 @@
     try { video.currentTime = 0; } catch (e) { /* not loaded yet; fine */ }
     var p = video.play();
     if (p && p.catch) p.catch(fail); /* autoplay blocked or source unsupported: straight to the phone */
-    after(function () { if (!started) goLive(false); }, 6000); /* slow network: don't keep people waiting */
+    after(function () { if (!started) goLive(false); }, 4500); /* slow network: don't keep people waiting */
   }
 
   function replay() {
