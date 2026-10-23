@@ -172,6 +172,19 @@ export function PacePlanDialog({ open, onClose, clubId, edition, existing }: { o
   );
 }
 
+/** Opens the pace dialog for a book, editing the existing plan when there is one. */
+export function PacePlanLauncher({ clubId, edition, onClose }: { clubId: string; edition: EditionSummary; onClose: () => void }) {
+  const q = usePacePlan(clubId, edition.id);
+  if (q.isPending) {
+    return (
+      <Dialog open onClose={onClose} title="Plan the pace">
+        <Spinner />
+      </Dialog>
+    );
+  }
+  return <PacePlanDialog open onClose={onClose} clubId={clubId} edition={edition} existing={q.data ?? undefined} />;
+}
+
 /** The schedule and the viewer's own pace for a book with a plan; a prompt to plan one otherwise. */
 export function PacePanel({ clubId, edition, compact = false }: { clubId: string; edition: EditionSummary; compact?: boolean }) {
   const q = usePacePlan(clubId, edition.id);
@@ -186,7 +199,7 @@ export function PacePanel({ clubId, edition, compact = false }: { clubId: string
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-control border border-dashed border-line px-4 py-3 text-sm">
         <span className="text-ink-muted">No pace set for this book yet.</span>
         <Button size="sm" variant="secondary" icon={Gauge} onClick={() => setPlanning(true)}>
-          Plan the pace
+          Plan pace
         </Button>
         {planning && <PacePlanDialog open onClose={() => setPlanning(false)} clubId={clubId} edition={edition} />}
       </div>

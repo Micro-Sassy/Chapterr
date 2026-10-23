@@ -4,6 +4,7 @@ import type { MeetingDetail } from "@shared/types";
 import { Avatar } from "@/components/Avatar";
 import { MemberLink } from "@/components/content";
 import { Button, Card, Field, Input, SectionTitle } from "@/components/ui";
+import { useSession } from "@/lib/auth";
 import { daysUntil, formatInZone, zoneAbbr } from "@/lib/calendar";
 import { useRsvp } from "./api";
 import { RsvpChips, rsvpSummaryLine } from "./RsvpChips";
@@ -19,7 +20,8 @@ function deadlineLine(deadline: string, tz: string, passed: boolean): string {
 /** Your reply with guests and a note, the deadline, and who said what. */
 export function RsvpPanel({ meeting: m, clubId, tz }: { meeting: MeetingDetail; clubId: string; tz: string }) {
   const rsvp = useRsvp(clubId, m.id);
-  const mine = m.rsvps.find((r) => r.status === m.rsvp.mine && r.guests === m.rsvp.myGuests) ?? null;
+  const userId = useSession().data?.user.id;
+  const mine = m.rsvps.find((r) => r.id === userId) ?? null;
   const [guests, setGuests] = useState(String(m.rsvp.myGuests ?? 0));
   const [note, setNote] = useState(mine?.note ?? "");
   const [editing, setEditing] = useState(false);
@@ -56,7 +58,7 @@ export function RsvpPanel({ meeting: m, clubId, tz }: { meeting: MeetingDetail; 
             </form>
           ) : (
             <Button size="sm" variant="ghost" onClick={() => setEditing(true)}>
-              {m.rsvp.mine === "going" ? "Guests and note" : "Add a note"}
+              {m.rsvp.mine === "going" ? "Edit reply" : "Add note"}
             </Button>
           )}
         </div>

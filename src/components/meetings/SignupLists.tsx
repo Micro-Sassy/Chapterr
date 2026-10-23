@@ -6,7 +6,9 @@ import { Avatar } from "@/components/Avatar";
 import { clubApi, useSharedMutation } from "@/components/records";
 import { Badge, Button, Card, cx, Field, IconButton, Input, SectionTitle, Select } from "@/components/ui";
 import { Dialog } from "@/components/ui/Dialog";
-import { api } from "@/lib/api";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/components/ui/Toast";
+import { api, ApiRequestError, errorMessage } from "@/lib/api";
 import { meetingInvalidations } from "./api";
 
 export const SIGNUP_KIND_LABELS: Record<SignupKind, string> = { potluck: "Potluck", supplies: "Supplies", tasks: "Tasks", other: "Sign-up" };
@@ -26,12 +28,27 @@ function ListCard({ list, clubId }: { list: SignupList; clubId: string }) {
   const [note, setNote] = useState("");
   const addItem = useSharedMutation(() => api(clubApi(clubId, `/signups/${list.id}/items`), { body: { label: label.trim(), quantity: Number(quantity) || 1 } }), keys);
   const removeItem = useSharedMutation((itemId: string) => api(clubApi(clubId, `/signups/items/${itemId}`), { method: "DELETE" }), keys);
-  const claim = useSharedMutation((v: { itemId: string; note: string | null }) => api(clubApi(clubId, `/signups/items/${v.itemId}/claim`), { method: "PUT", body: { note: v.note } }), keys);
+  const removeList = useSharedMutation(() => api(clubApi(clubId, `/signups/${list.id}`), { method: "DELETE" }), keys, "List removed.");
+  const qc = useQueryClient();
+  const toast = useToast();
+  const claim = useMutation({
+    mutationFn: (v: { itemId: string; note: string | null }) => api(clubApi(clubId, `/signups/items/${v.itemId}/claim`), { method: "PUT", body: { note: v.note } }),
+    onSuccess: () => {
+      for (const k of keys) void qc.invalidateQueries({ queryKey: k });
+    },
+    onError: (err) => {
+      for (const k of keys) void qc.invalidateQueries({ queryKey: k });
+      toast(err instanceof ApiRequestError && err.code === "item_taken" ? "Someone claimed that first. The list is refreshed." : errorMessage(err), "error");
+    },
+  });
   return (
     <Card as="article" className="p-4 sm:p-5">
-      <h3 className="heading-s flex items-center gap-2">
-        {list.title} <Badge tone="neutral">{SIGNUP_KIND_LABELS[list.kind]}</Badge>
-      </h3>
+      <div className="flex items-start justify-between gap-2">
+        <h3 className="heading-s flex items-center gap-2">
+          {list.title} <Badge tone="neutral">{SIGNUP_KIND_LABELS[list.kind]}</Badge>
+        </h3>
+        <IconButton icon={Trash2} label={`Remove the ${list.title} list`} onClick={() => removeList.mutate(undefined)} />
+      </div>
       <ul className="mt-3 divide-y divide-line/70">
         {list.items.length === 0 && <li className="py-2 text-sm text-ink-muted">Nothing on this list yet.</li>}
         {list.items.map((item) => {

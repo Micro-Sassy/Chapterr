@@ -37,7 +37,14 @@ export function RolesPanel({ meeting: m, clubId, canManage }: { meeting: Meeting
               Fairness
             </Button>
             {canManage && !editing && (
-              <Button size="sm" variant="secondary" onClick={() => setEditing(true)}>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => {
+                  setDraft({ host: m.roles.host?.id ?? "", picker: m.roles.picker?.id ?? "", notetaker: m.roles.notetaker?.id ?? "" });
+                  setEditing(true);
+                }}
+              >
                 Assign
               </Button>
             )}

@@ -61,7 +61,7 @@ function ClubCard({ club }: { club: ClubCardData }) {
 
 /** "3-day streak, log today": one chip linking to the reading log. */
 function StreakChip() {
-  const q = useQuery({ queryKey: ["streak"], queryFn: () => api<Streak>("/api/reading-log/streak"), retry: false });
+  const q = useQuery({ queryKey: ["streak"], queryFn: () => api<Streak>(`/api/reading-log/streak?today=${todayIso()}`), retry: false });
   if (!q.data) return null;
   const s = q.data;
   return (

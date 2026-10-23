@@ -3,8 +3,12 @@
  * lists and a strict serialiser for exports. No dependencies.
  */
 
-/** Parse CSV text into rows of cells. Handles quoted cells, doubled quotes, CRLF and a trailing newline. */
-export function parseCsv(text: string): string[][] {
+/**
+ * Parse CSV text into rows of cells. Handles quoted cells, doubled quotes, CRLF
+ * and a trailing newline. Blank lines are dropped unless `keepBlank` is set
+ * (then they come back as `[""]` so line numbers stay meaningful).
+ */
+export function parseCsv(text: string, opts: { keepBlank?: boolean } = {}): string[][] {
   const rows: string[][] = [];
   let row: string[] = [];
   let cell = "";
@@ -46,12 +50,12 @@ export function parseCsv(text: string): string[][] {
     row.push(cell);
     rows.push(row);
   }
-  // Drop rows that are entirely blank.
+  if (opts.keepBlank) return rows;
   return rows.filter((r) => r.some((c) => c.trim() !== ""));
 }
 
 export interface InviteRow {
-  /** 1-based line number in the original file (after blank lines are dropped). */
+  /** 1-based line number in the original file. */
   row: number;
   email: string;
   name: string | null;
@@ -65,14 +69,14 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
  * whose first cell is not an email is reported in `invalid`.
  */
 export function parseInviteCsv(text: string): { rows: InviteRow[]; invalid: { row: number; value: string; reason: string }[] } {
-  const parsed = parseCsv(text);
+  const parsed = parseCsv(text, { keepBlank: true });
   const rows: InviteRow[] = [];
   const invalid: { row: number; value: string; reason: string }[] = [];
   let emailCol = 0;
   let nameCol: number | null = 1;
   let start = 0;
-  const head = parsed[0];
-  if (head) {
+  const head = parsed.find((r) => r.some((c) => c.trim() !== ""));
+  if (head && parsed.indexOf(head) === 0) {
     const lower = head.map((c) => c.trim().toLowerCase());
     const headerLike = !lower.some((c) => c.includes("@"));
     if (headerLike) {
@@ -86,6 +90,7 @@ export function parseInviteCsv(text: string): { rows: InviteRow[]; invalid: { ro
   for (let i = start; i < parsed.length; i++) {
     const cells = parsed[i]!;
     const lineNo = i + 1;
+    if (!cells.some((c) => c.trim() !== "")) continue; // blank line
     const rawEmail = (cells[emailCol] ?? "").trim().replace(/^<|>$/g, "");
     const email = rawEmail.toLowerCase();
     if (!email) {

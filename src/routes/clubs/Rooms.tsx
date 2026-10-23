@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, BookOpenText, DoorOpen, Lock, Pencil, Plus, Sparkles, WandSparkles } from "lucide-react";
+import { ArrowLeft, BookOpenText, DoorOpen, Lock, Pencil, Plus, Sparkles, Trash2, WandSparkles } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 import { Link, useParams, useSearchParams } from "react-router";
 import { GATE_TYPES, ROOM_KINDS, WAVE2_LIMITS, type GateType, type RoomKind } from "@shared/constants";
@@ -13,12 +13,12 @@ import { ProgressControl, type ProgressInput } from "@/components/chat/ProgressC
 import { RoomCard } from "@/components/chat/RoomCard";
 import { guideKey, progressAllKey, progressKey, roomKey, roomsKey } from "@/components/chat/types";
 import { clubApi } from "@/components/records";
-import { Alert, Badge, Button, Card, Checkbox, cx, EmptyState, Field, Input, PageHeader, SectionTitle, Select, Spinner } from "@/components/ui";
+import { Alert, Badge, Button, Card, Checkbox, cx, EmptyState, Field, IconButton, Input, PageHeader, SectionTitle, Select, Spinner } from "@/components/ui";
 import { Dialog } from "@/components/ui/Dialog";
 import { useToast } from "@/components/ui/Toast";
 import { api, ApiRequestError, errorMessage } from "@/lib/api";
 import { useSession } from "@/lib/auth";
-import { authorsLine } from "@/lib/format";
+import { authorsLine, todayIso } from "@/lib/format";
 import { clubPath, isAdmin, useClub } from "@/lib/club";
 import { useDocumentTitle } from "@/lib/hooks";
 
@@ -30,7 +30,7 @@ function useRooms(clubId: string, editionId: string) {
   return useQuery({ queryKey: roomsKey(clubId, editionId), queryFn: () => api<DiscussionRoom[]>(clubApi(clubId, `/books/${encodeURIComponent(editionId)}/rooms`)) });
 }
 function useProgress(clubId: string, editionId: string) {
-  return useQuery({ queryKey: progressKey(clubId, editionId), queryFn: () => api<ClubReadingProgress>(clubApi(clubId, `/books/${encodeURIComponent(editionId)}/progress`)) });
+  return useQuery({ queryKey: progressKey(clubId, editionId), queryFn: () => api<ClubReadingProgress>(clubApi(clubId, `/books/${encodeURIComponent(editionId)}/progress?today=${todayIso()}`)) });
 }
 function useProgressAll(clubId: string, editionId: string) {
   return useQuery({ queryKey: progressAllKey(clubId, editionId), queryFn: () => api<MemberProgress[]>(clubApi(clubId, `/books/${encodeURIComponent(editionId)}/progress/all`)) });
@@ -197,7 +197,7 @@ function AddRoomDialog({ clubId, editionId, open, onClose }: { clubId: string; e
 function GenerateGuideDialog({ clubId, editionId, open, onClose, hasGuide, chapterCount }: { clubId: string; editionId: string; open: boolean; onClose: () => void; hasGuide: boolean; chapterCount: number | null }) {
   const qc = useQueryClient();
   const toast = useToast();
-  const [aiUnavailable, setAiUnavailable] = useState(false);
+  const [aiUnavailable, setAiUnavailable] = useState<string | null>(null);
   const [confirmSource, setConfirmSource] = useState<"template" | "ai" | null>(null);
   const generate = useMutation({
     mutationFn: (source: "template" | "ai") => api<DiscussionGuide>(clubApi(clubId, `/books/${encodeURIComponent(editionId)}/guide/generate`), { body: { source, chapters: chapterCount } }),
@@ -209,7 +209,7 @@ function GenerateGuideDialog({ clubId, editionId, open, onClose, hasGuide, chapt
       onClose();
     },
     onError: (err) => {
-      if (err instanceof ApiRequestError && err.status === 409 && err.code === "ai_unavailable") setAiUnavailable(true);
+      if (err instanceof ApiRequestError && err.status === 409 && err.code === "ai_unavailable") setAiUnavailable(err.message || "Needs an API key.");
       setConfirmSource(null);
     },
   });
@@ -249,7 +249,7 @@ function GenerateGuideDialog({ clubId, editionId, open, onClose, hasGuide, chapt
             <button
               type="button"
               onClick={() => run("ai")}
-              disabled={generate.isPending || aiUnavailable}
+              disabled={generate.isPending || !!aiUnavailable}
               aria-describedby={aiUnavailable ? "ai-note" : undefined}
               className="flex w-full items-start gap-3 rounded-card border border-line p-4 text-left hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-60"
             >
@@ -261,7 +261,7 @@ function GenerateGuideDialog({ clubId, editionId, open, onClose, hasGuide, chapt
             </button>
             {aiUnavailable && (
               <p id="ai-note" className="mt-1.5 text-xs text-ink-muted" role="status">
-                Needs an API key. Ask whoever runs Chapterr to add one; the template works meanwhile.
+                Needs an API key. {aiUnavailable}
               </p>
             )}
           </div>
@@ -384,7 +384,18 @@ function PinnedQuestions({ questions }: { questions: DiscussionRoom["questions"]
   );
 }
 
-function RoomView({ clubId, room, onBack, focusMessageId }: { clubId: string; room: DiscussionRoom; onBack: () => void; focusMessageId?: string | null }) {
+function RoomView({ clubId, room, onBack, focusMessageId, canManage }: { clubId: string; room: DiscussionRoom; onBack: () => void; focusMessageId?: string | null; canManage?: boolean }) {
+  const toast = useToast();
+  const invalidate = useInvalidateRooms(clubId, room.edition.id);
+  const remove = useMutation({
+    mutationFn: () => api(clubApi(clubId, `/rooms/${encodeURIComponent(room.id)}`), { method: "DELETE" }),
+    onSuccess: () => {
+      invalidate();
+      toast("Room removed.");
+      onBack();
+    },
+    onError: (err) => toast(errorMessage(err), "error"),
+  });
   const detail = useQuery({
     queryKey: roomKey(clubId, room.id),
     queryFn: () => api<DiscussionRoom>(clubApi(clubId, `/rooms/${encodeURIComponent(room.id)}`)),
@@ -405,6 +416,9 @@ function RoomView({ clubId, room, onBack, focusMessageId }: { clubId: string; ro
           {ROOM_KIND_LABELS[live.kind]} · {gateLabel(live)} · {live.membersInside} inside
         </p>
       </div>
+      {canManage && (
+        <IconButton icon={Trash2} label="Remove room" disabled={remove.isPending} onClick={() => confirm(`Remove "${live.title}" and everything said in it?`) && remove.mutate()} />
+      )}
     </div>
   );
 
@@ -466,7 +480,7 @@ export function RoomsPage() {
   const [adding, setAdding] = useState(false);
 
   const saveProgress = useMutation({
-    mutationFn: (input: ProgressInput) => api<ClubReadingProgress>(clubApi(club.id, `/books/${encodeURIComponent(editionId)}/progress`), { method: "PUT", body: input }),
+    mutationFn: (input: ProgressInput) => api<ClubReadingProgress>(clubApi(club.id, `/books/${encodeURIComponent(editionId)}/progress?today=${todayIso()}`), { method: "PUT", body: input }),
     onSuccess: (p) => {
       qc.setQueryData(progressKey(club.id, editionId), p);
       void qc.invalidateQueries({ queryKey: roomsKey(club.id, editionId) });
@@ -506,7 +520,7 @@ export function RoomsPage() {
   if (openRoom) {
     return (
       <div className="space-y-4">
-        <RoomView key={openRoom.id} clubId={club.id} room={openRoom} onBack={() => setOpenRoom(null)} focusMessageId={params.get("message")} />
+        <RoomView key={openRoom.id} clubId={club.id} room={openRoom} onBack={() => setOpenRoom(null)} focusMessageId={params.get("message")} canManage={admin} />
       </div>
     );
   }

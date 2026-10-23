@@ -11,7 +11,7 @@ type Links = ShareLinks & Partial<ShareLinksExtras>;
 
 /** Hand the meeting to WhatsApp, Messages or email; or copy the text. */
 export function ShareSheet({ open, onClose, clubId, meetingId }: { open: boolean; onClose: () => void; clubId: string; meetingId: string }) {
-  const q = useQuery({ queryKey: ["meeting-share", clubId, meetingId], queryFn: () => api<Links>(clubApi(clubId, `/meetings/${meetingId}/share`)), enabled: open, staleTime: 60_000 });
+  const q = useQuery({ queryKey: ["meeting-share", clubId, meetingId], queryFn: () => api<Links>(clubApi(clubId, `/bridge/share?kind=meeting&id=${encodeURIComponent(meetingId)}`)), enabled: open, staleTime: 60_000 });
   const [copied, setCopied] = useState(false);
   const canNativeShare = typeof navigator !== "undefined" && typeof navigator.share === "function";
   const text = q.data?.copy ?? (q.data ? `${q.data.text}\n${q.data.url}` : "");

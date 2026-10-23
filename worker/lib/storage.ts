@@ -198,7 +198,14 @@ export async function fileOwner(env: Env, clubId: string, fileId: string): Promi
 
 export interface FileContent {
   record: FileRecord;
-  body: ReadableStream | ArrayBuffer;
+  body: ReadableStream | Uint8Array;
+}
+
+/** D1 returns BLOB columns as an ArrayBuffer or, depending on the driver, a plain number array. */
+function toBytes(data: ArrayBuffer | number[] | Uint8Array): Uint8Array {
+  if (data instanceof Uint8Array) return data;
+  if (Array.isArray(data)) return Uint8Array.from(data);
+  return new Uint8Array(data);
 }
 
 /** The bytes of a file. R2 objects stream; D1 blobs are returned whole. */
@@ -218,9 +225,9 @@ export async function getFile(env: Env, clubId: string, fileId: string): Promise
     if (!obj) return null;
     return { record, body: obj.body };
   }
-  const blob = await first<{ data: ArrayBuffer }>(env.DB, "SELECT data FROM file_blobs WHERE file_id = ?", fileId);
+  const blob = await first<{ data: ArrayBuffer | number[] | Uint8Array }>(env.DB, "SELECT data FROM file_blobs WHERE file_id = ?", fileId);
   if (!blob) return null;
-  return { record, body: blob.data };
+  return { record, body: toBytes(blob.data) };
 }
 
 /** Remove a file and its bytes. Clears any club banner that pointed at it. */

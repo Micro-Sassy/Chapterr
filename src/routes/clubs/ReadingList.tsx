@@ -7,7 +7,7 @@ import type { Assignment, AssignmentWithRanges, ClubAnnualBook, ClubGoal, Editio
 import { BookPicker, BookRow } from "@/components/books";
 import { useClubTimezone, useMeetings } from "@/components/meetings/api";
 import { EditionMappingForm, rangesLine } from "@/components/meetings/EditionMappingForm";
-import { PacePanel, PacePlanDialog } from "@/components/meetings/PacePlanner";
+import { PacePanel, PacePlanLauncher } from "@/components/meetings/PacePlanner";
 import { ShareDialog } from "@/components/content";
 import { AuditLine, clubApi, useSharedMutation } from "@/components/records";
 import { Alert, Badge, Button, Card, Checkbox, EmptyState, Field, IconButton, Input, LinkButton, PageHeader, ProgressBar, SectionTitle, Select, Spinner, Textarea, TextLink, type BadgeTone } from "@/components/ui";
@@ -149,7 +149,7 @@ function AnnualList({ clubId, year }: { clubId: string; year: number }) {
                           </TextLink>
                           {!b.archivedAt && b.status !== "completed" && (
                             <button type="button" onClick={() => setPacing(b.edition)} className="inline-flex items-center gap-1 text-xs font-medium text-ink underline decoration-line underline-offset-2 hover:decoration-ink">
-                              <Gauge className="size-3" aria-hidden /> Plan the pace
+                              <Gauge className="size-3" aria-hidden /> Plan pace
                             </button>
                           )}
                           <AuditLine item={b} />
@@ -186,7 +186,7 @@ function AnnualList({ clubId, year }: { clubId: string; year: number }) {
         {editing && <AnnualEntryForm book={editing} onSave={(status, note) => update.mutate({ book: editing, status, note }, { onSuccess: () => setEditing(null) })} busy={update.isPending} />}
       </Dialog>
       <ShareDialog open={sharing} onClose={() => setSharing(false)} input={{ resourceType: "club_list", clubId, year }} label={`the club's ${year} reading list`} />
-      {pacing && <PacePlanDialog open onClose={() => setPacing(null)} clubId={clubId} edition={pacing} />}
+      {pacing && <PacePlanLauncher onClose={() => setPacing(null)} clubId={clubId} edition={pacing} />}
     </section>
   );
 }

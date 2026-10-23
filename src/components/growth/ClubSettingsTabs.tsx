@@ -15,15 +15,25 @@ import { JoinRequestsPanel, newQuestionKey, ScreeningQuestionsEditor, type Draft
 /** `GET /api/clubs/:id` carries `branding` since wave 2; the shared Club type does not list it yet. */
 export type ClubWithBranding = Club & { branding?: ClubBranding | null };
 
+/** Banner URLs are `/api/clubs/:clubId/files/:fileId/content`; the PUT wants the file id back. */
+export function bannerFileIdFromUrl(url: string | null | undefined): string | null {
+  const m = url ? /\/files\/([^/?#]+)\/content/.exec(url) : null;
+  return m?.[1] ?? null;
+}
+
+/** `GET /settings` also returns the club's `version`, which the PUT expects back. */
+type LoadedSettings = ClubSettings & { version?: number };
+
 export function useClubSettings(clubId: string) {
-  return useQuery({ queryKey: ["club-settings", clubId], queryFn: () => api<ClubSettings>(clubApi(clubId, "/settings")) });
+  return useQuery({ queryKey: ["club-settings", clubId], queryFn: () => api<LoadedSettings>(clubApi(clubId, "/settings")) });
 }
 
 function useSaveSettings(club: Club) {
   const qc = useQueryClient();
   const toast = useToast();
   return useMutation({
-    mutationFn: (body: Partial<ClubSettings> & { discordWebhookUrl?: string | null }) => api<ClubSettings>(clubApi(club.id, "/settings"), { method: "PUT", body: { ...body, expectedVersion: club.version } }),
+    mutationFn: (body: Partial<ClubSettings> & { discordWebhookUrl?: string | null; expectedVersion?: number }) =>
+      api<ClubSettings>(clubApi(club.id, "/settings"), { method: "PUT", body: { ...body, expectedVersion: body.expectedVersion ?? club.version } }),
     onSuccess: (saved) => {
       qc.setQueryData(["club-settings", club.id], saved);
       void qc.invalidateQueries({ queryKey: ["club", club.id] });
@@ -43,8 +53,9 @@ function useSaveSettings(club: Club) {
 }
 
 /** Settings body built from the loaded settings with one section replaced, so saving one tab never resets another. */
-function withSection(s: ClubSettings, patch: Partial<ClubSettings>) {
+function withSection(s: LoadedSettings, patch: Partial<ClubSettings> & { discordWebhookUrl?: string | null }) {
   return {
+    expectedVersion: s.version,
     welcomeMessage: s.welcomeMessage,
     joinPolicy: s.joinPolicy,
     screeningQuestions: s.screeningQuestions.map((q) => ({ id: q.id, label: q.label, required: q.required })),
@@ -95,7 +106,7 @@ export function BrandingTab({ club }: { club: ClubWithBranding }) {
     mutationFn: () =>
       api<Club>(clubApi(club.id, "/branding"), {
         method: "PUT",
-        body: { accentColor: accent || null, bannerFileId: bannerRemoved ? null : (bannerFile?.id ?? undefined), expectedVersion: club.version },
+        body: { accentColor: accent || null, bannerFileId: bannerRemoved ? null : (bannerFile?.id ?? bannerFileIdFromUrl(branding.bannerUrl)), expectedVersion: club.version },
       }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["club", club.id] });
@@ -433,7 +444,7 @@ export function BridgeTab({ club }: { club: Club }) {
   const configured = s.discordWebhookConfigured;
   const next = meetings.data?.[0];
   const submit = (value: string | null) =>
-    save.mutate(withSection(s, { discordWebhookUrl: value } as Partial<ClubSettings>), {
+    save.mutate(withSection(s, { discordWebhookUrl: value }), {
       onSuccess: () => {
         setUrl("");
         setEditing(false);

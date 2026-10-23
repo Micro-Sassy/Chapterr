@@ -4,6 +4,7 @@ import type { ClubWrapped, MonthlyRecap } from "@shared/types";
 import { checkAccent, contrastRatio } from "@/lib/branding";
 import { cleanOcrText } from "@/lib/ocr";
 import { urlBase64ToUint8Array } from "@/lib/push";
+import { bannerFileIdFromUrl } from "./growth/ClubSettingsTabs";
 import { parseInviteCsv, splitCsvLine, toInviteCsv } from "./growth/csv";
 import { checkPhone, formatPhone } from "./growth/phone";
 import { buildStreakStrip, currentStreak, streakChipText } from "./growth/streak";
@@ -217,6 +218,14 @@ describe("branding contrast", () => {
     expect(checkAccent("#B8903F")).toMatchObject({ linenOk: true, forestOk: true });
     expect(checkAccent("#F0E6D2").summary).toMatch(/dark grounds only/);
     expect(checkAccent("#1E3A2F").summary).toMatch(/light grounds only/);
+  });
+});
+
+describe("branding banner id", () => {
+  it("reads the file id back out of a banner URL", () => {
+    expect(bannerFileIdFromUrl("/api/clubs/c1/files/f_abc123/content")).toBe("f_abc123");
+    expect(bannerFileIdFromUrl(null)).toBeNull();
+    expect(bannerFileIdFromUrl("https://example.com/x.png")).toBeNull();
   });
 });
 

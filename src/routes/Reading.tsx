@@ -37,7 +37,7 @@ function TodayLog({ day, entry, library }: { day: string; entry: ReadingLogEntry
     setNote(entry?.note ?? "");
   }, [entry, day]);
   const save = useMutation({
-    mutationFn: () => api<ReadingLogEntry>(`/api/reading-log/${day}`, { method: "PUT", body: { pages: Number(pages) || 0, minutes: Number(minutes) || 0, editionId: editionId || null, note: note || null } }),
+    mutationFn: () => api<{ entry: ReadingLogEntry; streak: Streak }>(`/api/reading-log/${day}?today=${todayIso()}`, { method: "PUT", body: { pages: Number(pages) || 0, minutes: Number(minutes) || 0, editionId: editionId || null, note: note || null } }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["reading-log"] });
       void qc.invalidateQueries({ queryKey: ["streak"] });
@@ -105,8 +105,8 @@ export function ReadingPage() {
   const [day, setDay] = useState(today);
   const [creating, setCreating] = useState(false);
   const from = addDays(today, -(12 * 7 + 6));
-  const streak = useQuery({ queryKey: ["streak"], queryFn: () => api<Streak>("/api/reading-log/streak") });
-  const log = useQuery({ queryKey: ["reading-log", from, today], queryFn: () => api<ReadingLogEntry[]>(`/api/reading-log?from=${from}&to=${today}`) });
+  const streak = useQuery({ queryKey: ["streak"], queryFn: () => api<Streak>(`/api/reading-log/streak?today=${todayIso()}`) });
+  const log = useQuery({ queryKey: ["reading-log", from, today], queryFn: () => api<ReadingLogEntry[]>(`/api/reading-log?from=${from}&to=${today}&today=${today}`) });
   const library = useQuery({ queryKey: ["library"], queryFn: () => api<UserBook[]>("/api/library") });
   const month = today.slice(0, 7);
   const recap = useQuery({ queryKey: ["recap", "me", month], queryFn: () => api<MonthlyRecap>(`/api/recaps/monthly?month=${month}`) });

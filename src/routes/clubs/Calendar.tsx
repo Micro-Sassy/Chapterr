@@ -56,7 +56,7 @@ function SubscribeDialog({ open, onClose, clubId }: { open: boolean; onClose: ()
             </ul>
           </details>
           <a href={url} download="chapterr.ics" className={buttonClass("ghost", "sm")}>
-            <Download className="size-4" aria-hidden /> Download .ics once
+            <Download className="size-4" aria-hidden /> Download .ics
           </a>
         </div>
       )}

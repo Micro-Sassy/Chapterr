@@ -105,7 +105,7 @@ fileRoutes.get("/:id/content", async (c) => {
   const { record, body } = found;
   const download = c.req.query("download") === "1";
   const filename = safeFilename(record.title, record.contentType);
-  return new Response(body as BodyInit, {
+  return new Response(body as unknown as BodyInit, {
     status: 200,
     headers: {
       "Content-Type": record.contentType,

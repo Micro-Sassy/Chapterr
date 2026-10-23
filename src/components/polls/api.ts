@@ -47,5 +47,5 @@ export function usePoll(clubId: string, pollId: string | undefined) {
 
 export const POLL_KIND_LABELS = { book: "Next book", date: "Meeting date", custom: "Question" } as const;
 
-/** Whether members may add options (defaults to true when the API omits the flag). */
-export const allowsMemberOptions = (poll: Poll): boolean => (poll as Poll & { allowMemberOptions?: boolean }).allowMemberOptions ?? true;
+/** Whether members may add options while the poll is open. */
+export const allowsMemberOptions = (poll: Poll): boolean => poll.allowMemberOptions ?? true;

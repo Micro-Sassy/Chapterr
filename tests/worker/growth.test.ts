@@ -54,7 +54,7 @@ const turnstile = { "x-turnstile-token": "ok" };
 async function upload(m: Member, path: string, fields: Record<string, string>, file: { name: string; type: string; bytes: Uint8Array } | null, method = "POST") {
   const form = new FormData();
   for (const [k, v] of Object.entries(fields)) form.set(k, v);
-  if (file) form.set("file", new File([file.bytes as BlobPart], file.name, { type: file.type }));
+  if (file) form.set("file", new File([file.bytes as unknown as ArrayBuffer], file.name, { type: file.type }));
   const headers = new Headers({ origin: ORIGIN, "cf-connecting-ip": m.ip, cookie: m.cookie });
   const req = new Request(`${ORIGIN}${path}`, { method, headers, body: form });
   const ctx = createExecutionContext();
@@ -264,7 +264,7 @@ describe("join requests", () => {
     expect((await as(member)(`${sbase}/join-requests`)).status).toBe(403);
     const list = await json(await as(owner)(`${sbase}/join-requests?status=pending`));
     expect(list).toHaveLength(1);
-    expect(list[0]).toMatchObject({ id: pending.requestId, status: "pending", message: "Hi there", answers: [{ questionId, label: "Why join?", answer: "again" }] });
+    expect(list[0]).toMatchObject({ id: pending.requestId, status: "pending", message: "Hi there", answers: [{ questionId, label: "Why join?", answer: "I love books" }] });
     expect(list[0].member.id).toBe(member.id);
 
     const approved = await json(await as(owner)(`${sbase}/join-requests/${pending.requestId}/approve`, { method: "POST", body: {} }));
@@ -314,7 +314,7 @@ describe("csv helpers", () => {
       { row: 2, email: "ann@example.com", name: "Ann" },
       { row: 5, email: "cy@example.com", name: "Cy, Jr" },
     ]);
-    expect(parsed.invalid.map((i) => i.row)).toEqual([3, 4]);
+    expect(parsed.invalid.map((i) => i.row)).toEqual([3]);
     expect(parseInviteCsv("solo@example.com").rows).toEqual([{ row: 1, email: "solo@example.com", name: null }]);
     expect(toCsv(["a", "b"], [["=SUM(1)", 'q"t']])).toBe('a,b\r\n\'=SUM(1),"q""t"\r\n');
   });
@@ -330,7 +330,7 @@ describe("bulk invites", () => {
     const result = await json(res);
     expect(result.sent).toBe(2);
     expect(result.skipped).toEqual([
-      { row: 3, email: fresh.email.toUpperCase(), reason: "Duplicate in file" },
+      { row: 3, email: fresh.email, reason: "Duplicate in file" },
       { row: 4, email: member.email, reason: "Already a member" },
       { row: 5, email: "bad-address", reason: "Not a valid email address" },
     ]);

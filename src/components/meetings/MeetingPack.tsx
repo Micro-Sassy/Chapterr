@@ -66,7 +66,7 @@ export function MeetingPackDrawer({ open, onClose, meeting: m, clubId, tz }: { o
   const [copied, setCopied] = useState(false);
   const text = q.data ? packToText(q.data, m, tz) : "";
   const print = () => {
-    const w = window.open("", "_blank", "noopener,width=720,height=900");
+    const w = window.open("", "_blank", "width=720,height=900");
     if (!w) return;
     w.document.title = `${m.title} meeting pack`;
     const pre = w.document.createElement("pre");

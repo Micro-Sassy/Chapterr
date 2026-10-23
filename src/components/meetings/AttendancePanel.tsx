@@ -1,11 +1,12 @@
-import { useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Check, UserCheck } from "lucide-react";
 import { useState } from "react";
 import type { MeetingDetail } from "@shared/types";
 import { Avatar } from "@/components/Avatar";
 import { clubApi, useSharedMutation } from "@/components/records";
 import { Button, Card, Checkbox, SectionTitle, Spinner } from "@/components/ui";
-import { api } from "@/lib/api";
+import { useToast } from "@/components/ui/Toast";
+import { api, ApiRequestError, errorMessage } from "@/lib/api";
 import { attendanceWindowOpen, meetingInvalidations, meetingKeys, useClubMembers } from "./api";
 
 /**
@@ -19,7 +20,15 @@ export function AttendancePanel({ meeting: m, clubId, canManage }: { meeting: Me
   const prefill = () => new Set(m.attendance.marked ? m.attendees.map((a) => a.id) : m.rsvps.filter((r) => r.status === "going").map((r) => r.id));
   const selected = draft ?? prefill();
   const save = useSharedMutation((userIds: string[]) => api(clubApi(clubId, `/meetings/${m.id}/attendance`), { method: "PUT", body: { userIds } }), meetingInvalidations(clubId), "Attendance saved.");
-  const checkIn = useSharedMutation(() => api(clubApi(clubId, `/meetings/${m.id}/attendance/me`), { method: "POST" }), meetingInvalidations(clubId), "You're checked in.");
+  const toast = useToast();
+  const checkIn = useMutation({
+    mutationFn: () => api(clubApi(clubId, `/meetings/${m.id}/attendance/me`), { method: "POST" }),
+    onSuccess: () => {
+      for (const k of meetingInvalidations(clubId)) void qc.invalidateQueries({ queryKey: k });
+      toast("You're checked in.");
+    },
+    onError: (err) => toast(err instanceof ApiRequestError && err.code === "checkin_closed" ? "Check-in is open from six hours before the meeting to six hours after." : errorMessage(err), "error"),
+  });
   const windowOpen = attendanceWindowOpen(m.startsAt);
   const past = Date.parse(m.startsAt) < new Date().getTime();
 

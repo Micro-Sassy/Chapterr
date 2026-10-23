@@ -129,13 +129,15 @@ describe("push subscriptions", () => {
     }
     const received: { url: string; headers: Headers; body: Uint8Array }[] = [];
     vi.restoreAllMocks();
-    installFetchMock(async (url, init) => {
+    installFetchMock((url, init) => {
       if (!url.startsWith("https://push.example/")) return undefined;
-      const body = new Uint8Array(await new Response(init?.body as BodyInit).arrayBuffer());
-      received.push({ url, headers: new Headers(init?.headers), body });
-      if (url.endsWith("/gone")) return new Response(null, { status: 410 });
-      if (url.endsWith("/flaky")) return new Response(null, { status: 500 });
-      return new Response(null, { status: 201 });
+      return (async () => {
+        const body = new Uint8Array(await new Response(init?.body as BodyInit).arrayBuffer());
+        received.push({ url, headers: new Headers(init?.headers), body });
+        if (url.endsWith("/gone")) return new Response(null, { status: 410 });
+        if (url.endsWith("/flaky")) return new Response(null, { status: 500 });
+        return new Response(null, { status: 201 });
+      })();
     });
     const payload = { title: "Push Club", body: "Meeting tonight", url: `/c/${club.id}/meetings`, tag: "meeting_reminder" };
     const result = await sendPush(testEnv, alice.id, payload);
@@ -173,10 +175,12 @@ describe("push subscriptions", () => {
     expect((await as(bob)("/api/push/subscribe", { body: { endpoint: browser.endpoint, keys: browser.keys } })).status).toBe(201);
     const received: { url: string; body: Uint8Array }[] = [];
     vi.restoreAllMocks();
-    installFetchMock(async (url, init) => {
+    installFetchMock((url, init) => {
       if (!url.startsWith("https://push.example/")) return undefined;
-      received.push({ url, body: new Uint8Array(await new Response(init?.body as BodyInit).arrayBuffer()) });
-      return new Response(null, { status: 201 });
+      return (async () => {
+        received.push({ url, body: new Uint8Array(await new Response(init?.body as BodyInit).arrayBuffer()) });
+        return new Response(null, { status: 201 });
+      })();
     });
     await notifyUsers(testEnv, [bob.id], { kind: "mention", clubId: club.id, title: "Alice mentioned you", body: "@bob see this", link: `/c/${club.id}/messages`, actorId: alice.id });
     expect(received).toHaveLength(1);

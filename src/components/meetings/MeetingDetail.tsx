@@ -212,11 +212,11 @@ export function MeetingDetailPage() {
       <div className="grid gap-4 lg:grid-cols-2">
         <RsvpPanel meeting={m} clubId={club.id} tz={tz} />
         <div className="space-y-4">
-          <RolesPanel meeting={m} clubId={club.id} canManage={canManage} />
+          <RolesPanel meeting={m} clubId={club.id} canManage={admin} />
           <AttendancePanel meeting={m} clubId={club.id} canManage={canManage} />
         </div>
       </div>
-      <NotesPanel key={`${m.id}-${m.version}`} meeting={m} clubId={club.id} />
+      <NotesPanel key={m.id} meeting={m} clubId={club.id} />
       <SignupLists meeting={m} clubId={club.id} />
       <p>
         <AuditLine item={m} />

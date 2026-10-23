@@ -5,13 +5,12 @@ import type { Challenge, ChallengeParticipant } from "../../shared/types";
 import type { AppEnv, Env } from "../env";
 import { hasRole } from "../lib/club";
 import { all, first, placeholders, run } from "../lib/db";
-import { ApiError, badRequest, forbidden, notFound } from "../lib/errors";
+import { ApiError, badRequest, conflict, forbidden, notFound } from "../lib/errors";
 import { parseBody, parseWith } from "../lib/http";
 import { mapMember, mapMemberOrNull, memberCols, type Row } from "../lib/mappers";
 import { notifyUsers, type WaitUntil } from "../lib/notify";
 import { longestStreakWithin } from "../lib/streaks";
 import { newId, nowIso } from "../lib/util";
-import { updateVersioned } from "../lib/versioned";
 
 /**
  * Reading challenges. Personal challenges (/api/challenges) belong to one
@@ -218,28 +217,29 @@ async function insertChallenge(env: Env, clubId: string | null, ownerId: string,
   return id;
 }
 
-async function updateChallenge(env: Env, id: string, userId: string, clubId: string | null, body: unknown): Promise<void> {
+/** Optimistic-concurrency update (challenges carry version/updated_at but no updated_by). */
+async function updateChallenge(env: Env, id: string, userId: string, clubId: string | null, body: unknown, current: () => Promise<Challenge>): Promise<void> {
   const input = parseWith(challengeUpdateSchema, body);
   await validateGenre(env, input, clubId, userId);
-  await updateVersioned({
-    db: env.DB,
-    table: "challenges",
+  const res = await run(
+    env.DB,
+    `UPDATE challenges SET title = ?, description = ?, kind = ?, target = ?, genre_id = ?, starts_on = ?, ends_on = ?, version = version + 1, updated_at = ?
+      WHERE id = ? AND version = ? AND archived_at IS NULL AND ${clubId ? "club_id = ?" : "owner_id = ? AND club_id IS NULL"}`,
+    input.title,
+    input.description,
+    input.kind,
+    input.target,
+    input.kind === "genre" ? input.genreId : null,
+    input.startsOn,
+    input.endsOn,
+    nowIso(),
     id,
-    expectedVersion: input.expectedVersion,
-    userId,
-    label: "Challenge",
-    set: {
-      title: input.title,
-      description: input.description,
-      kind: input.kind,
-      target: input.target,
-      genre_id: input.kind === "genre" ? input.genreId : null,
-      starts_on: input.startsOn,
-      ends_on: input.endsOn,
-    },
-    where: clubId ? { club_id: clubId } : { owner_id: userId },
-    load: () => first(env.DB, "SELECT id FROM challenges WHERE id = ? AND archived_at IS NULL", id),
-  });
+    input.expectedVersion,
+    clubId ?? userId,
+  );
+  if (res.meta.changes === 0) {
+    throw conflict("Someone else updated this challenge while you were editing. Review the latest version and try again.", await current());
+  }
   // Targets may have changed: let completion be re-evaluated.
   await run(env.DB, "UPDATE challenge_participants SET completed_at = NULL WHERE challenge_id = ?", id);
 }
@@ -267,7 +267,7 @@ challengeRoutes.put("/:id", async (c) => {
   const user = c.get("user");
   const id = parseWith(idSchema, c.req.param("id"));
   await loadOne(c.env, user.id, id, null);
-  await updateChallenge(c.env, id, user.id, null, await c.req.json().catch(() => ({})));
+  await updateChallenge(c.env, id, user.id, null, await c.req.json().catch(() => ({})), () => loadOne(c.env, user.id, id, null));
   return c.json(await loadOne(c.env, user.id, id, null, c.executionCtx));
 });
 
@@ -332,7 +332,7 @@ clubChallengeRoutes.put("/:id", async (c) => {
   const id = parseWith(idSchema, c.req.param("id"));
   const existing = await loadOne(c.env, user.id, id, club.id);
   if (!canManage(c, existing.owner?.id ?? null)) throw forbidden("Only the challenge's creator or a club admin can edit it");
-  await updateChallenge(c.env, id, user.id, club.id, await c.req.json().catch(() => ({})));
+  await updateChallenge(c.env, id, user.id, club.id, await c.req.json().catch(() => ({})), () => loadOne(c.env, user.id, id, club.id));
   return c.json(await loadOne(c.env, user.id, id, club.id, c.executionCtx));
 });
 

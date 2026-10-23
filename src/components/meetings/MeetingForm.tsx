@@ -130,6 +130,7 @@ export function MeetingForm({ clubId, initial, onDone }: { clubId: string; initi
       {initial?.seriesId && (
         <fieldset className="space-y-1.5 rounded-control border border-line p-4 text-sm">
           <legend className="px-1 font-medium">Apply changes to</legend>
+          <p className="mb-2 text-xs text-ink-muted">The repeat pattern itself cannot change. To reschedule the series, archive it and plan it again.</p>
           {(["this", "future", "all"] as MeetingScope[]).map((s) => (
             <label key={s} className="flex items-center gap-2">
               <input type="radio" name="scope" value={s} checked={scope === s} onChange={() => setScope(s)} />
