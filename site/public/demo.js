@@ -214,7 +214,7 @@
   function top(title, eyebrow, right, back) {
     return '<header class="d-top">' +
       (back ? '<button class="d-icon-btn d-back" data-act="back" aria-label="Back">' + icon("back") + "</button>" : "") +
-      "<div>" + (eyebrow ? '<p class="d-eyebrow">' + eyebrow + "</p>" : "") + '<h1 class="d-h1">' + title + "</h1></div>" +
+      "<div>" + (eyebrow ? '<p class="d-eyebrow">' + eyebrow + "</p>" : "") + '<h2 class="d-h1">' + title + "</h2></div>" +
       (right || "") + "</header>";
   }
   function clubTop(extraRight) {
