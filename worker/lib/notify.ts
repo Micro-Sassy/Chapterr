@@ -4,9 +4,11 @@ import { createEmailProvider } from "../email";
 import { clubUpdateEmail } from "../email/templates";
 import type { Env } from "../env";
 import { publish } from "../realtime/publish";
-import { all, first, placeholders } from "./db";
+import { sendSms } from "../sms";
+import { all, bool, first, placeholders } from "./db";
 import { mapMemberOrNull, memberCols, type Row } from "./mappers";
 import { newId, nowIso } from "./util";
+import { sendPush } from "./webpush";
 
 /**
  * Which preference switches a kind off. Membership notices (joined, role
@@ -37,6 +39,15 @@ const PREF_COLUMN: Record<NotificationKind, string | null> = {
   welcome: null,
 };
 
+export interface NotifyChannels {
+  /** Web Push to members with `push_enabled` (plus the kind's own switch). Default: on. */
+  push?: boolean;
+  /** SMS to opted-in members. Default: on for `meeting_reminder` only. */
+  sms?: boolean;
+  /** Email (pref `email_meeting_reminders`). Default: on for `meeting_reminder` only. */
+  email?: boolean;
+}
+
 export interface NotifyInput {
   kind: NotificationKind;
   title: string;
@@ -45,14 +56,103 @@ export interface NotifyInput {
   actorId: string;
   /** The club the notice belongs to; null for account-level notices. */
   clubId: string | null;
+  /** Override which extra channels fan out (see NotifyChannels defaults). */
+  channels?: NotifyChannels;
+}
+
+/** Per-kind push switch on top of `push_enabled`. */
+const PUSH_PREF_COLUMN: Partial<Record<NotificationKind, string>> = {
+  mention: "push_mentions",
+  thread_reply: "push_mentions",
+  reaction: "push_mentions",
+  meeting_reminder: "push_meeting_reminders",
+};
+
+interface ChannelPrefRow {
+  user_id: string;
+  push_enabled: number | null;
+  push_mentions: number | null;
+  push_meeting_reminders: number | null;
+  email_meeting_reminders: number | null;
+  email: string;
+  name: string;
+}
+
+function prefOn(v: number | null | undefined): boolean {
+  return v === null || v === undefined ? true : bool(v);
+}
+
+/**
+ * Fan a notice out to push / SMS / email for the recipients who already got
+ * the in-app copy. Best effort: every failure is logged, never thrown.
+ */
+async function fanOut(env: Env, recipients: string[], input: NotifyInput, clubName: string | null): Promise<void> {
+  const channels: Required<NotifyChannels> = {
+    push: input.channels?.push ?? true,
+    sms: input.channels?.sms ?? input.kind === "meeting_reminder",
+    email: input.channels?.email ?? input.kind === "meeting_reminder",
+  };
+  if (!channels.push && !channels.sms && !channels.email) return;
+  let rows: ChannelPrefRow[];
+  try {
+    rows = await all<ChannelPrefRow>(
+      env.DB,
+      `SELECT u.id AS user_id, u.email, u.name, np.push_enabled, np.push_mentions, np.push_meeting_reminders, np.email_meeting_reminders
+         FROM "user" u LEFT JOIN notification_preferences np ON np.user_id = u.id
+        WHERE u.id IN (${placeholders(recipients.length)})`,
+      ...recipients,
+    );
+  } catch (err) {
+    console.error("notification fan-out lookup failed", err instanceof Error ? err.message : err);
+    return;
+  }
+  const link = input.link ?? "/";
+  const payload = {
+    title: clubName && !input.title.includes(clubName) ? `${clubName}: ${input.title}` : input.title,
+    body: input.body ?? "",
+    url: link,
+    tag: `${input.kind}:${input.clubId ?? "account"}`,
+  };
+  const smsText = `${clubName ? `${clubName}: ` : ""}${input.title}${input.body ? ` ${input.body}` : ""}`.slice(0, 300);
+  const tasks: Promise<unknown>[] = [];
+  let emailProvider: ReturnType<typeof createEmailProvider> | null = null;
+  if (channels.email) {
+    try {
+      emailProvider = createEmailProvider(env);
+    } catch (err) {
+      console.error("notification email skipped:", err instanceof Error ? err.message : err);
+    }
+  }
+  for (const r of rows) {
+    const kindCol = PUSH_PREF_COLUMN[input.kind];
+    const pushAllowed = prefOn(r.push_enabled) && (!kindCol || prefOn(r[kindCol as keyof ChannelPrefRow] as number | null));
+    if (channels.push && pushAllowed) tasks.push(sendPush(env, r.user_id, payload));
+    if (channels.sms) tasks.push(sendSms(env, r.user_id, smsText));
+    if (channels.email && emailProvider && prefOn(r.email_meeting_reminders) && clubName && input.clubId) {
+      const url = `${env.PUBLIC_APP_URL.replace(/\/+$/, "")}${link}`;
+      tasks.push(
+        emailProvider.send(clubUpdateEmail(r.email, r.name, clubName, input.title, input.body ? [input.body] : [], url)).catch((err: unknown) => {
+          console.error("notification email failed", err instanceof Error ? err.message : err);
+        }),
+      );
+    }
+  }
+  await Promise.allSettled(tasks);
 }
 
 /**
  * Create in-app notifications for the given recipients (respecting each
- * member's preferences) and push them over the club's realtime channel.
+ * member's preferences) and push them over the club's realtime channel, then
+ * fan out to Web Push (and SMS / email for reminders) per member preferences.
  * `"club"` addresses every member of `input.clubId`. Never notifies the actor.
+ * Pass `ctx` where one is available so the fan-out runs after the response.
  */
-export async function notifyUsers(env: Env, recipientIds: string[] | "club", input: NotifyInput): Promise<void> {
+/** Anything with waitUntil (Hono's context, a Worker ExecutionContext). */
+export interface WaitUntil {
+  waitUntil(promise: Promise<unknown>): void;
+}
+
+export async function notifyUsers(env: Env, recipientIds: string[] | "club", input: NotifyInput, ctx?: WaitUntil): Promise<void> {
   const col = PREF_COLUMN[input.kind];
   // Members without a preferences row get the defaults (everything on).
   const prefFilter = col ? `AND COALESCE(np.${col}, 1) = 1` : "";
@@ -116,6 +216,15 @@ export async function notifyUsers(env: Env, recipientIds: string[] | "club", inp
   const clubId = input.clubId;
   if (clubId) {
     await Promise.all(created.map((c) => publish(env, clubId, [c.userId], { type: "notification.created", notification: c.notification })));
+  }
+  const extra = fanOut(env, recipients, input, club?.name ?? null);
+  if (ctx) ctx.waitUntil(extra);
+  else {
+    try {
+      await extra;
+    } catch (err) {
+      console.error("notification fan-out failed", err instanceof Error ? err.message : err);
+    }
   }
 }
 

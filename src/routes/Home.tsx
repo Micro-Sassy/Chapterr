@@ -1,13 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
-import { CalendarDays, ClipboardList, KeyRound, MessageCircle, Plus, Users } from "lucide-react";
+import { CalendarDays, ClipboardList, Clock, Flame, KeyRound, MessageCircle, Plus, Users } from "lucide-react";
 import { useState } from "react";
 import { Link, Navigate } from "react-router";
-import type { ClubCard as ClubCardData, HomeData } from "@shared/types";
+import type { ClubCard as ClubCardData, HomeData, MyJoinRequest, Streak } from "@shared/types";
 import { RoleChip } from "@/components/AppShell";
 import { BookCover } from "@/components/BookCover";
 import { BookRow } from "@/components/books";
+import { streakChipText } from "@/components/growth/streak";
 import { JoinCodeDialog } from "@/components/JoinCodeDialog";
-import { Alert, Button, Card, EmptyState, LinkButton, ProgressBar, SectionTitle, Spinner, TextLink } from "@/components/ui";
+import { Alert, Badge, Button, Card, cx, EmptyState, LinkButton, ProgressBar, SectionTitle, Spinner, TextLink } from "@/components/ui";
 import { api, errorMessage } from "@/lib/api";
 import { useSession } from "@/lib/auth";
 import { clubPath, takePendingJoin } from "@/lib/club";
@@ -58,6 +59,54 @@ function ClubCard({ club }: { club: ClubCardData }) {
   );
 }
 
+/** "3-day streak, log today": one chip linking to the reading log. */
+function StreakChip() {
+  const q = useQuery({ queryKey: ["streak"], queryFn: () => api<Streak>("/api/reading-log/streak"), retry: false });
+  if (!q.data) return null;
+  const s = q.data;
+  return (
+    <Link
+      to="/reading"
+      className={cx(
+        "inline-flex items-center gap-1.5 rounded-chip border px-2.5 py-1 text-xs font-semibold",
+        s.today ? "border-accent/40 bg-accent-soft text-ink" : "border-line bg-surface text-ink hover:bg-surface-2",
+      )}
+      aria-label={`${streakChipText(s)}. Open the reading log`}
+    >
+      <Flame className="size-3.5" aria-hidden strokeWidth={1.75} />
+      {streakChipText(s)}
+    </Link>
+  );
+}
+
+/** Clubs the member has asked to join and is still waiting on. */
+function PendingRequests() {
+  const q = useQuery({ queryKey: ["join-requests", "mine"], queryFn: () => api<MyJoinRequest[] | { items: MyJoinRequest[] }>("/api/clubs/requests").then((r) => (Array.isArray(r) ? r : r.items)), retry: false, staleTime: 60_000 });
+  const pending = q.data?.filter((r) => r.status === "pending") ?? [];
+  if (pending.length === 0) return null;
+  return (
+    <Alert tone="info">
+      <div className="flex flex-wrap items-center gap-2">
+        <Clock className="size-4 shrink-0 text-ink-muted" aria-hidden strokeWidth={1.75} />
+        <span>
+          {pending.length === 1 ? (
+            <>
+              Your request to join <strong>{pending[0]!.club.name}</strong> is waiting for an admin.
+            </>
+          ) : (
+            <>
+              {pending.length} join requests are waiting for an admin: {pending.map((r) => r.club.name).join(", ")}.
+            </>
+          )}
+        </span>
+        <Badge tone="brass" className="ml-auto">
+          Pending
+        </Badge>
+      </div>
+    </Alert>
+  );
+}
+
 export function HomePage() {
   useDocumentTitle("Home");
   const { data: session } = useSession();
@@ -80,6 +129,9 @@ export function HomePage() {
         <div>
           <p className="label text-ink-muted">Home</p>
           <h1 className="display-l mt-1">{firstName ? `Welcome back, ${firstName}` : "Welcome back"}</h1>
+          <div className="mt-3">
+            <StreakChip />
+          </div>
         </div>
         {d.clubs.length > 0 && (
           <div className="flex gap-2">
@@ -92,6 +144,8 @@ export function HomePage() {
           </div>
         )}
       </header>
+
+      <PendingRequests />
 
       <section>
         <SectionTitle>Your clubs</SectionTitle>

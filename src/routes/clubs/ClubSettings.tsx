@@ -10,6 +10,8 @@ import { clubCreateSchema, deleteClubSchema, transferOwnershipSchema } from "@sh
 import type { Club, ClubBilling, ClubInvite, ClubMember } from "@shared/types";
 import { RoleChip } from "@/components/AppShell";
 import { Avatar } from "@/components/Avatar";
+import { BulkInvite } from "@/components/growth/BulkInvite";
+import { BrandingTab, BridgeTab, ExportTab, JoiningTab, RemindersTab, type ClubWithBranding } from "@/components/growth/ClubSettingsTabs";
 import { InviteCreator, InviteLink } from "@/components/InviteCreator";
 import { clubApi } from "@/components/records";
 import { Alert, Badge, Button, Card, EmptyState, Field, Input, PageHeader, SectionTitle, Select, Spinner, Tabs, Textarea } from "@/components/ui";
@@ -22,7 +24,8 @@ import { useConfig } from "@/lib/config";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { useDocumentTitle } from "@/lib/hooks";
 
-type TabKey = "details" | "invites" | "members" | "billing" | "danger";
+type TabKey = "details" | "branding" | "joining" | "invites" | "members" | "reminders" | "bridge" | "export" | "billing" | "danger";
+const ADMIN_TABS: TabKey[] = ["branding", "joining", "invites", "members", "reminders", "bridge", "export"];
 
 // --- Details --------------------------------------------------------------------------------------
 
@@ -138,6 +141,10 @@ function InvitesTab({ club }: { club: Club }) {
         <SectionTitle as="h2">New invite link</SectionTitle>
         <p className="mb-4 text-sm text-ink-muted">Anyone with the link can join as a member. Up to 20 live invites per club.</p>
         <InviteCreator clubId={club.id} clubName={club.name} />
+      </Card>
+      <Card>
+        <SectionTitle as="h2">Bulk invite</SectionTitle>
+        <BulkInvite clubId={club.id} />
       </Card>
       <Card>
         <SectionTitle as="h2">Invite links</SectionTitle>
@@ -439,15 +446,25 @@ function OwnerZone({ club }: { club: Club }) {
 }
 
 export function ClubSettingsPage() {
-  const club = useClub();
+  const club = useClub() as ClubWithBranding;
   useDocumentTitle(`Settings · ${club.name}`);
   const [params, setParams] = useSearchParams();
   const admin = isAdmin(club);
   const requested = (params.get("tab") as TabKey | null) ?? "details";
-  const tab: TabKey = !admin && (requested === "invites" || requested === "members") ? "details" : requested;
+  const tab: TabKey = !admin && ADMIN_TABS.includes(requested) ? "details" : requested;
   const tabs: { value: TabKey; label: string }[] = [
     { value: "details", label: "Details" },
-    ...(admin ? [{ value: "invites" as const, label: "Invites" }, { value: "members" as const, label: "Members" }] : []),
+    ...(admin
+      ? [
+          { value: "branding" as const, label: "Branding" },
+          { value: "joining" as const, label: "Joining" },
+          { value: "invites" as const, label: "Invites" },
+          { value: "members" as const, label: "Members" },
+          { value: "reminders" as const, label: "Reminders & roles" },
+          { value: "bridge" as const, label: "Bridge" },
+          { value: "export" as const, label: "Export" },
+        ]
+      : []),
     { value: "billing", label: "Billing" },
     { value: "danger", label: club.role === "owner" ? "Leave or delete" : "Leave" },
   ];
@@ -456,8 +473,13 @@ export function ClubSettingsPage() {
       <PageHeader eyebrow={club.name} title="Club settings" />
       <Tabs label="Club settings sections" value={tab} onChange={(t) => setParams({ tab: t })} tabs={tabs} />
       {tab === "details" && <DetailsTab club={club} />}
+      {tab === "branding" && admin && <BrandingTab club={club} />}
+      {tab === "joining" && admin && <JoiningTab club={club} />}
       {tab === "invites" && admin && <InvitesTab club={club} />}
       {tab === "members" && admin && <MembersTab club={club} />}
+      {tab === "reminders" && admin && <RemindersTab club={club} />}
+      {tab === "bridge" && admin && <BridgeTab club={club} />}
+      {tab === "export" && admin && <ExportTab club={club} />}
       {tab === "billing" && <BillingTab club={club} />}
       {tab === "danger" && (
         <div className="space-y-6">
@@ -468,4 +490,3 @@ export function ClubSettingsPage() {
     </div>
   );
 }
-

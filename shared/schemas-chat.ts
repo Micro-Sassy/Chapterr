@@ -39,3 +39,10 @@ export const guideSchema = z.object({
   expectedVersion: z.number().int().min(1).optional(),
 });
 export const guideGenerateSchema = z.object({ source: z.enum(["template", "ai"]), chapters: z.preprocess(emptyToNull, z.coerce.number().int().min(1).max(200).nullable()).default(null) });
+
+/** Scheduled sends must be at least 2 minutes out and at most 90 days out (checked server-side against the clock). */
+export const SCHEDULED_MIN_LEAD_MS = 2 * 60_000;
+export const SCHEDULED_MAX_LEAD_MS = 90 * 86_400_000;
+
+/** Usernames are [a-z0-9_]; a mention is `@username` not glued to a preceding word character. */
+export const MENTION_PATTERN = /(^|[^A-Za-z0-9_])@([A-Za-z0-9][A-Za-z0-9_]{1,29})/g;

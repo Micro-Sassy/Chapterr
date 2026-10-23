@@ -81,3 +81,61 @@ export const editionMappingSchema = z.object({
   total: z.coerce.number().int().min(1).max(10_000_000),
   label: z.preprocess(emptyToNull, plainText(120).nullable()).default(null),
 });
+
+// ---------------------------------------------------------------------------
+// Meetings (W1). The wave 1 `meetingSchema` lives in shared/schemas.ts; the
+// create/edit schemas below carry the same base fields plus the wave 2 ones.
+// (Defined here rather than extended from schemas.ts to avoid a circular import.)
+// ---------------------------------------------------------------------------
+
+const ianaZone = z
+  .string()
+  .trim()
+  .min(1)
+  .max(64)
+  .regex(/^[A-Za-z_][A-Za-z0-9_+\-/]*$/, "Invalid time zone");
+
+const meetingBaseFields = {
+  title: plainText(200, 1),
+  startsAt: isoDateTime,
+  endsAt: z.preprocess(emptyToNull, isoDateTime.nullable()).default(null),
+  location: z.preprocess(emptyToNull, plainText(300).nullable()).default(null),
+  locationUrl: z.preprocess(emptyToNull, z.url().max(500).nullable()).default(null),
+  details: z.preprocess(emptyToNull, longText(5000).nullable()).default(null),
+  editionId: z.preprocess(emptyToNull, idSchema.nullable()).default(null),
+  timezone: z.preprocess(emptyToNull, ianaZone.nullable()).default(null),
+  rsvpDeadline: z.preprocess(emptyToNull, isoDateTime.nullable()).default(null),
+  roles: meetingRolesSchema.optional(),
+};
+
+const meetingTimeCheck = (d: { startsAt: string; endsAt: string | null }) => !d.endsAt || Date.parse(d.endsAt) > Date.parse(d.startsAt);
+
+export const meetingCreateSchema = z
+  .object({
+    ...meetingBaseFields,
+    recurrence: recurrenceSchema.nullable().default(null),
+    autoAssignRoles: z.boolean().default(false),
+  })
+  .refine(meetingTimeCheck, { path: ["endsAt"], message: "End must be after start" });
+export type MeetingCreateInput = z.input<typeof meetingCreateSchema>;
+
+export const meetingEditSchema = z
+  .object({ ...meetingBaseFields, expectedVersion: z.number().int().min(1) })
+  .refine(meetingTimeCheck, { path: ["endsAt"], message: "End must be after start" });
+export type MeetingEditInput = z.input<typeof meetingEditSchema>;
+
+export const meetingScopeSchema = z.enum(["this", "future", "all"]).default("this");
+
+export const calendarMonthSchema = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "Use YYYY-MM");
+
+export const pollOptionsAddSchema = z.object({ options: z.array(pollOptionInputSchema).min(1).max(WAVE2_LIMITS.pollOptionsMax) });
+
+export const pollApplySchema = z
+  .object({
+    year: z.preprocess(emptyToNull, yearSchema.nullable()).default(null),
+    title: z.preprocess(emptyToNull, plainText(200).nullable()).default(null),
+  })
+  .default({ year: null, title: null });
+
+export const pacePlanUpdateSchema = pacePlanSchema.omit({ editionId: true }).extend({ expectedVersion: z.number().int().min(1) });
+export type PacePlanUpdateInput = z.input<typeof pacePlanUpdateSchema>;

@@ -1,16 +1,20 @@
 import { useQuery } from "@tanstack/react-query";
-import { Archive, ArchiveRestore, ArrowDown, ArrowUp, ClipboardList, Pencil, Plus, Share2, Tags, Target } from "lucide-react";
+import { Archive, ArchiveRestore, ArrowDown, ArrowUp, ClipboardList, Gauge, MessageSquare, Pencil, Plus, Share2, Tags, Target, Vote } from "lucide-react";
 import { useState } from "react";
 import { useSearchParams } from "react-router";
 import { CLUB_BOOK_STATUSES, type ClubBookStatus } from "@shared/constants";
-import type { Assignment, ClubAnnualBook, ClubGoal, EditionSummary, Meeting } from "@shared/types";
+import type { Assignment, AssignmentWithRanges, ClubAnnualBook, ClubGoal, EditionSummary } from "@shared/types";
 import { BookPicker, BookRow } from "@/components/books";
+import { useClubTimezone, useMeetings } from "@/components/meetings/api";
+import { EditionMappingForm, rangesLine } from "@/components/meetings/EditionMappingForm";
+import { PacePanel, PacePlanDialog } from "@/components/meetings/PacePlanner";
 import { ShareDialog } from "@/components/content";
 import { AuditLine, clubApi, useSharedMutation } from "@/components/records";
-import { Alert, Badge, Button, Card, Checkbox, EmptyState, Field, IconButton, Input, LinkButton, PageHeader, ProgressBar, SectionTitle, Select, Spinner, Textarea, type BadgeTone } from "@/components/ui";
+import { Alert, Badge, Button, Card, Checkbox, EmptyState, Field, IconButton, Input, LinkButton, PageHeader, ProgressBar, SectionTitle, Select, Spinner, Textarea, TextLink, type BadgeTone } from "@/components/ui";
 import { Dialog } from "@/components/ui/Dialog";
 import { api } from "@/lib/api";
 import { clubPath, useClub } from "@/lib/club";
+import { formatZonedDate } from "@/lib/calendar";
 import { formatDate, todayIso } from "@/lib/format";
 import { useDocumentTitle } from "@/lib/hooks";
 
@@ -70,6 +74,7 @@ function AnnualList({ clubId, year }: { clubId: string; year: number }) {
   const [adding, setAdding] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [editing, setEditing] = useState<ClubAnnualBook | null>(null);
+  const [pacing, setPacing] = useState<EditionSummary | null>(null);
   const q = useQuery({
     queryKey: ["club-books", clubId, year, showArchived],
     queryFn: () => api<ClubAnnualBook[]>(clubApi(clubId, `/books?year=${year}${showArchived ? "&archived=1" : ""}`)),
@@ -101,7 +106,10 @@ function AnnualList({ clubId, year }: { clubId: string; year: number }) {
     <section>
       <SectionTitle
         action={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            <LinkButton to={`${clubPath(clubId, "polls")}?new=book&year=${year}`} size="sm" variant="secondary" icon={Vote}>
+              Start a poll
+            </LinkButton>
             <Button size="sm" variant="secondary" icon={Share2} onClick={() => setSharing(true)}>
               Share
             </Button>
@@ -136,6 +144,14 @@ function AnnualList({ clubId, year }: { clubId: string; year: number }) {
                         <span className="flex flex-wrap items-center gap-2">
                           <Badge tone={statusTone(b.status)}>{statusLabels[b.status]}</Badge>
                           {b.archivedAt && <Badge>Archived</Badge>}
+                          <TextLink to={clubPath(clubId, `rooms/${b.edition.id}`)} className="inline-flex items-center gap-1 text-xs">
+                            <MessageSquare className="size-3" aria-hidden /> Discuss
+                          </TextLink>
+                          {!b.archivedAt && b.status !== "completed" && (
+                            <button type="button" onClick={() => setPacing(b.edition)} className="inline-flex items-center gap-1 text-xs font-medium text-ink underline decoration-line underline-offset-2 hover:decoration-ink">
+                              <Gauge className="size-3" aria-hidden /> Plan the pace
+                            </button>
+                          )}
                           <AuditLine item={b} />
                         </span>
                       }
@@ -170,6 +186,24 @@ function AnnualList({ clubId, year }: { clubId: string; year: number }) {
         {editing && <AnnualEntryForm book={editing} onSave={(status, note) => update.mutate({ book: editing, status, note }, { onSuccess: () => setEditing(null) })} busy={update.isPending} />}
       </Dialog>
       <ShareDialog open={sharing} onClose={() => setSharing(false)} input={{ resourceType: "club_list", clubId, year }} label={`the club's ${year} reading list`} />
+      {pacing && <PacePlanDialog open onClose={() => setPacing(null)} clubId={clubId} edition={pacing} />}
+    </section>
+  );
+}
+
+/** The pace plan of every book the club is reading now. */
+function CurrentPace({ clubId, year }: { clubId: string; year: number }) {
+  const q = useQuery({ queryKey: ["club-books", clubId, year, false], queryFn: () => api<ClubAnnualBook[]>(clubApi(clubId, `/books?year=${year}`)) });
+  const current = (q.data ?? []).filter((b) => !b.archivedAt && b.status === "current");
+  if (current.length === 0) return null;
+  return (
+    <section>
+      <SectionTitle>Pace</SectionTitle>
+      <div className="space-y-3">
+        {current.map((b) => (
+          <PacePanel key={b.id} clubId={clubId} edition={b.edition} />
+        ))}
+      </div>
     </section>
   );
 }
@@ -222,7 +256,8 @@ export function EditionChooser({ value, onChange }: { value: EditionSummary | nu
 }
 
 function AssignmentForm({ clubId, initial, onDone }: { clubId: string; initial?: Assignment; onDone: () => void }) {
-  const meetings = useQuery({ queryKey: ["meetings", clubId, "upcoming"], queryFn: () => api<Meeting[]>(clubApi(clubId, "/meetings")) });
+  const meetings = useMeetings(clubId, "upcoming");
+  const tz = useClubTimezone();
   const [edition, setEdition] = useState<EditionSummary | null>(initial?.edition ?? null);
   const [meetingId, setMeetingId] = useState(initial?.meeting?.id ?? "");
   const [dueDate, setDueDate] = useState(initial?.dueDate ?? "");
@@ -251,7 +286,7 @@ function AssignmentForm({ clubId, initial, onDone }: { clubId: string; initial?:
               {initial?.meeting && !meetings.data?.some((m) => m.id === initial.meeting!.id) && <option value={initial.meeting.id}>{initial.meeting.title}</option>}
               {meetings.data?.map((m) => (
                 <option key={m.id} value={m.id}>
-                  {m.title} ({formatDate(m.startsAt)})
+                  {m.title} ({formatZonedDate(m.startsAt, m.timezone ?? tz)})
                 </option>
               ))}
             </Select>
@@ -277,11 +312,23 @@ function AssignmentForm({ clubId, initial, onDone }: { clubId: string; initial?:
   );
 }
 
+type AssignmentRow = Assignment & Partial<Pick<AssignmentWithRanges, "fromPage" | "toPage" | "pacePlanId" | "ranges">>;
+
+/** Which mappings are still missing for an assignment that has page bounds. */
+function missingMappings(a: AssignmentRow): ("kindle" | "audio")[] {
+  if (!a.ranges?.pages) return [];
+  const out: ("kindle" | "audio")[] = [];
+  if (!a.ranges.kindle) out.push("kindle");
+  if (!a.ranges.audio) out.push("audio");
+  return out;
+}
+
 function Assignments({ clubId }: { clubId: string }) {
   const [when, setWhen] = useState<"current" | "past">("current");
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Assignment | null>(null);
-  const q = useQuery({ queryKey: ["assignments", clubId, when], queryFn: () => api<Assignment[]>(clubApi(clubId, `/assignments?when=${when}&today=${todayIso()}`)) });
+  const [mappingFor, setMappingFor] = useState<string | null>(null);
+  const q = useQuery({ queryKey: ["assignments", clubId, when], queryFn: () => api<AssignmentRow[]>(clubApi(clubId, `/assignments?when=${when}&today=${todayIso()}`)) });
   const archive = useSharedMutation(
     (a: Assignment) => api(clubApi(clubId, `/assignments/${a.id}/archive`), { body: { expectedVersion: a.version } }),
     [["assignments", clubId], ["club-dashboard", clubId], ["home"]],
@@ -319,14 +366,26 @@ function Assignments({ clubId }: { clubId: string }) {
                     meta={
                       <span className="space-y-0.5">
                         <span className="block font-medium text-ink">
-                          {a.readingScope ?? "Read"} · due {formatDate(a.dueDate)}
+                          {rangesLine(a.ranges, a.readingScope) || "Read"} · due {formatDate(a.dueDate)}
                         </span>
+                        {a.ranges?.pages && a.readingScope && rangesLine(a.ranges) !== a.readingScope && <span className="block">{a.readingScope}</span>}
                         {a.meeting && <span className="block">For: {a.meeting.title}</span>}
+                        {a.pacePlanId && <Badge tone="brass">Pace plan</Badge>}
                         <AuditLine item={a} />
                       </span>
                     }
                   />
                   {a.details && <p className="mt-2 whitespace-pre-wrap text-sm">{a.details}</p>}
+                  {missingMappings(a).length > 0 && mappingFor !== a.id && (
+                    <button type="button" onClick={() => setMappingFor(a.id)} className="mt-2 text-xs font-medium text-ink underline decoration-line underline-offset-2 hover:decoration-ink">
+                      Add {missingMappings(a).length === 2 ? "Kindle or audio" : missingMappings(a)[0] === "kindle" ? "Kindle" : "audio"} mapping
+                    </button>
+                  )}
+                  {mappingFor === a.id && (
+                    <div className="mt-2">
+                      <EditionMappingForm editionId={a.edition.id} missing={missingMappings(a)} invalidate={[["assignments", clubId], ["pace-plan", clubId], ["club-dashboard", clubId]]} onSaved={() => setMappingFor(null)} />
+                    </div>
+                  )}
                 </div>
                 <IconButton icon={Pencil} label="Edit assignment" onClick={() => setEditing(a)} />
                 <IconButton icon={Archive} label="Archive assignment" onClick={() => archive.mutate(a)} />
@@ -377,6 +436,7 @@ export function ReadingListPage() {
       />
       {goal.data && <GoalEditor key={`${year}-${goal.data.goal?.version ?? 0}`} clubId={club.id} year={year} goal={goal.data.goal} completed={goal.data.completed} />}
       <AnnualList clubId={club.id} year={year} />
+      <CurrentPace clubId={club.id} year={year} />
       <Assignments clubId={club.id} />
     </div>
   );

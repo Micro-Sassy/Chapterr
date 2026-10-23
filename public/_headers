@@ -1,5 +1,6 @@
 # Security headers for static assets served by Cloudflare Workers Static Assets.
-# Fonts (Fraunces, Inter) and brand images are self-hosted, so no extra hosts are needed.
+# Fonts (Fraunces, Inter) and brand images are self-hosted. cdn.jsdelivr.net is allowed in connect-src only for
+# the OCR language data (quote capture from a photo); 'wasm-unsafe-eval' lets the bundled tesseract core compile.
 /*
   Strict-Transport-Security: max-age=63072000; includeSubDomains
   X-Content-Type-Options: nosniff
@@ -7,7 +8,7 @@
   Referrer-Policy: strict-origin-when-cross-origin
   X-Robots-Tag: noindex, nofollow
   Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
-  Content-Security-Policy: default-src 'self'; script-src 'self' https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; connect-src 'self' wss: https://challenges.cloudflare.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; manifest-src 'self'; worker-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; connect-src 'self' wss: https://challenges.cloudflare.com https://cdn.jsdelivr.net; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; manifest-src 'self'; worker-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests
 
 /assets/*
   Cache-Control: public, max-age=31536000, immutable

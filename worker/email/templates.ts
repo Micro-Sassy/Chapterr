@@ -137,3 +137,72 @@ export function clubUpdateEmail(to: string, name: string, clubName: string, head
   });
   return { to, subject: `${clubName}: ${heading} · ${BRAND.name}`, html, text };
 }
+
+/** Pre-meeting reminder (docs/FEATURES-2.md §1). `when` is already formatted in the club's time zone. */
+export function meetingReminderEmail(
+  to: string,
+  name: string,
+  clubName: string,
+  meeting: { title: string; when: string; location: string | null; locationUrl: string | null; book: string | null },
+  url: string,
+): EmailMessage {
+  const heading = `Reminder: ${meeting.title}`;
+  const lines = [`${clubName} meets ${meeting.when}.`];
+  if (meeting.location) lines.push(`Where: ${meeting.location}`);
+  if (meeting.locationUrl) lines.push(`Link: ${meeting.locationUrl}`);
+  if (meeting.book) lines.push(`Reading: ${meeting.book}`);
+  const { html, text } = layout({
+    preheader: `${clubName}: ${heading}`,
+    heading,
+    paragraphs: [`Hi ${name},`, ...lines, "Open the meeting page to RSVP, see who is coming and pick up anything on the sign-up list."],
+    action: { label: "Open the meeting", url },
+    footnote: `You are receiving this because meeting reminder emails are turned on in your ${BRAND.name} notification settings.`,
+  });
+  return { to, subject: `${heading} · ${clubName} · ${BRAND.name}`, html, text };
+}
+
+/** Catch-up digest: what a member missed in a club's chat and rooms since they last looked (wave 2, W2). */
+export function digestEmail(to: string, name: string, clubName: string, lines: string[], url: string): EmailMessage {
+  const heading = `Catching you up on ${clubName}`;
+  const { html, text } = layout({
+    preheader: `${clubName}: here is what you missed`,
+    heading,
+    paragraphs: [`Hi ${name},`, "The conversation moved on while you were away. Here is the short version, with nothing from rooms you have not reached yet.", ...lines],
+    action: { label: `Open ${clubName}`, url },
+    footnote: `You are receiving this because catch-up digests and club update emails are turned on in your ${BRAND.name} notification settings.`,
+  });
+  return { to, subject: `${clubName}: what you missed · ${BRAND.name}`, html, text };
+}
+
+/** A personal invitation to join a club (bulk CSV invites). The link carries a single-use code. */
+export function inviteEmail(to: string, name: string | null, clubName: string, invitedBy: string, url: string, expiresInDays: number): EmailMessage {
+  const { html, text } = layout({
+    preheader: `${invitedBy} invited you to join ${clubName} on ${BRAND.name}.`,
+    heading: `You are invited to ${clubName}`,
+    paragraphs: [
+      name ? `Hi ${name},` : "Hello,",
+      `${invitedBy} has invited you to join ${clubName}, a book club on ${BRAND.name}. One shelf for the books you read together, the meetings you plan and the conversations in between.`,
+      `This invitation is just for you and expires in ${expiresInDays} day${expiresInDays === 1 ? "" : "s"}. If you do not have a ${BRAND.name} account yet, you can create one in a minute and the club will be waiting.`,
+    ],
+    action: { label: `Join ${clubName}`, url },
+    footnote: `If you were not expecting this invitation, you can ignore this email. Nothing happens unless you accept.`,
+  });
+  return { to, subject: `${invitedBy} invited you to ${clubName} · ${BRAND.name}`, html, text };
+}
+
+/** To club admins: someone asked to join a club that screens new members. */
+export function joinRequestEmail(to: string, name: string, clubName: string, requester: string, answers: { label: string; answer: string }[], url: string): EmailMessage {
+  const lines = answers.filter((a) => a.answer.trim()).map((a) => `${a.label}: ${a.answer}`);
+  const { html, text } = layout({
+    preheader: `${requester} asked to join ${clubName}.`,
+    heading: `${requester} would like to join ${clubName}`,
+    paragraphs: [
+      `Hi ${name},`,
+      `${requester} has asked to join ${clubName}. Review the request on the Members page and approve or decline it.`,
+      ...(lines.length ? ["Their answers:", ...lines] : []),
+    ],
+    action: { label: "Review request", url },
+    footnote: `You are receiving this because you are an admin of ${clubName} on ${BRAND.name}.`,
+  });
+  return { to, subject: `${requester} asked to join ${clubName} · ${BRAND.name}`, html, text };
+}

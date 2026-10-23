@@ -1,7 +1,7 @@
 // Feature wave 2 types owned by the meetings/calendar/polls/pace work (W1/F1).
 // Re-exported from shared/types.ts. Keep additive; document in docs/FEATURES-2.md.
 import type { MeetingRole, PaceCadence, PollKind, RecurrenceFreq, RsvpStatus, SignupKind } from "./constants";
-import type { EditionSummary, MemberSummary } from "./types";
+import type { Assignment, EditionSummary, Meeting, MemberSummary } from "./types";
 
 export interface Recurrence {
   freq: RecurrenceFreq;
@@ -151,6 +151,7 @@ export interface Poll {
   closesAt: string | null;
   allowMultiple: boolean;
   anonymous: boolean;
+  allowMemberOptions: boolean;
   meetingId: string | null;
   year: number | null;
   options: PollOption[];
@@ -198,4 +199,36 @@ export interface EditionMapping {
   total: number;
   label: string | null;
   updatedAt: string;
+}
+
+// ---------------------------------------------------------------------------
+// Composed API shapes (W1). `Meeting` and `Assignment` live in shared/types.ts;
+// the wave 2 endpoints return these supersets.
+// ---------------------------------------------------------------------------
+
+/** What `GET /meetings` returns per row (and what every meeting write returns). */
+export type MeetingFull = Meeting & MeetingExtras;
+
+/** `GET /meetings/:id`: everything in MeetingFull plus the RSVP list, attendees and sign-up lists. */
+export type MeetingDetail = Meeting & MeetingDetailExtras;
+
+/** `Assignment` as returned by the API since wave 2: page bounds and the ranges derived from the edition's mappings. */
+export type AssignmentWithRanges = Assignment & {
+  fromPage: number | null;
+  toPage: number | null;
+  pacePlanId: string | null;
+  ranges: ReadingRanges;
+};
+
+/** `GET /api/books/editions/:id/mappings` and the `mappings` field on edition detail. */
+export interface EditionMappings {
+  editionId: string;
+  pageCount: number | null;
+  mappings: EditionMapping[];
+}
+
+export type MeetingScope = "this" | "future" | "all";
+
+export interface CalendarFeedUrl {
+  url: string;
 }

@@ -13,6 +13,7 @@ import { clubPath, useCurrentClubId } from "@/lib/club";
 import { formatDate } from "@/lib/format";
 import { Avatar } from "./Avatar";
 import { BookRow } from "./books";
+import { OcrCapture } from "./growth/OcrCapture";
 import { Turnstile, type TurnstileHandle } from "./Turnstile";
 import { Alert, Badge, Button, Card, Checkbox, cx, Field, IconButton, Input, Select, Textarea, type BadgeTone } from "./ui";
 import { Dialog } from "./ui/Dialog";
@@ -221,6 +222,12 @@ export function QuoteForm({ quote, editionId, onDone }: { quote?: Quote; edition
       <Field label="Quotation" error={form.formState.errors.text?.message}>
         {(id) => <Textarea id={id} rows={5} className="font-display text-lg" {...form.register("text")} />}
       </Field>
+      <OcrCapture
+        onText={(text) => {
+          const current = form.getValues("text") ?? "";
+          form.setValue("text", current.trim() ? `${current.trimEnd()}\n${text}` : text, { shouldDirty: true, shouldValidate: true });
+        }}
+      />
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Page or location" error={form.formState.errors.location?.message}>
           {(id) => <Input id={id} placeholder="p. 42" {...form.register("location")} />}

@@ -22,27 +22,16 @@ export default defineConfig({
       injectRegister: false,
       manifest: false, // served from public/manifest.webmanifest
       includeAssets: ["favicon.svg", "favicon.png", "robots.txt", "icons/*.png", "brand/chapterr/*.svg", "brand/chapterr/*.png"],
-      workbox: {
+      // Custom service worker (src/sw.ts): Workbox precache + the cover-proxy cache,
+      // the offline navigation fallback and the push/notificationclick handlers.
+      strategies: "injectManifest",
+      srcDir: "src",
+      filename: "sw.ts",
+      injectManifest: {
         globPatterns: ["**/*.{js,css,html,svg,png,woff2,webmanifest}"],
-        // Offline app shell: any navigation that is not an API call falls back
-        // to the cached index.html so the app opens without a connection.
-        navigateFallback: "/index.html",
-        navigateFallbackDenylist: [/^\/api\//],
-        // Private API responses are intentionally NOT cached by the service
-        // worker, so member data never lingers in Cache Storage on shared devices.
-        runtimeCaching: [
-          {
-            // Covers are proxied through our own origin (worker/routes/covers.ts).
-            urlPattern: ({ url, sameOrigin }) => sameOrigin && url.pathname === "/api/public/covers",
-            handler: "CacheFirst",
-            options: {
-              cacheName: "book-covers",
-              expiration: { maxEntries: 400, maxAgeSeconds: 60 * 60 * 24 * 30 },
-              cacheableResponse: { statuses: [200] },
-            },
-          },
-        ],
-        cleanupOutdatedCaches: true,
+        // The OCR engine (tesseract core + worker) is loaded on demand, never precached.
+        globIgnores: ["**/tesseract-core*", "**/worker.min*"],
+        maximumFileSizeToCacheInBytes: 3_000_000,
       },
       devOptions: { enabled: false },
     }),

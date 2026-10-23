@@ -7,10 +7,12 @@ import {
   changePasswordSchema,
   changeUsernameSchema,
   notificationPreferencesSchema,
+  phoneSchema,
   profileUpdateSchema,
+  pushPreferencesSchema,
 } from "../../shared/schemas";
 import { LIMITS } from "../../shared/constants";
-import type { Me, NotificationPreferences, SessionInfo } from "../../shared/types";
+import type { AccountContact, Me, NotificationPreferences, PushPreferences, SessionInfo } from "../../shared/types";
 import { getAuth } from "../auth/auth";
 import type { AppEnv } from "../env";
 import { all, bool, first, run } from "../lib/db";
@@ -31,6 +33,8 @@ interface ProfileRow {
   favorite_genres: string | null;
   default_visibility: "private" | "club";
   last_club_id: string | null;
+  phone: string | null;
+  sms_opt_in: number;
 }
 
 interface PrefRow {
@@ -40,9 +44,19 @@ interface PrefRow {
   inapp_reactions: number;
   email_club_updates: number;
   email_recommendations: number;
+  // Feature wave 2 channels (migration 0003)
+  push_enabled: number;
+  push_meeting_reminders: number;
+  push_mentions: number;
+  email_meeting_reminders: number;
+  sms_meeting_reminders: number;
+  digest_catch_up: number;
 }
 
-export function mapPrefs(row: PrefRow | null): NotificationPreferences {
+/** Me with the wave 2 additions: phone / SMS opt-in and the push, reminder and digest channels. */
+export type MeResponse = Me & AccountContact & { preferences: NotificationPreferences & PushPreferences };
+
+export function mapPrefs(row: PrefRow | null): NotificationPreferences & PushPreferences {
   return {
     inappDirectMessages: row ? bool(row.inapp_direct_messages) : true,
     inappRecommendations: row ? bool(row.inapp_recommendations) : true,
@@ -50,10 +64,16 @@ export function mapPrefs(row: PrefRow | null): NotificationPreferences {
     inappReactions: row ? bool(row.inapp_reactions) : true,
     emailClubUpdates: row ? bool(row.email_club_updates) : false,
     emailRecommendations: row ? bool(row.email_recommendations) : false,
+    pushEnabled: row ? bool(row.push_enabled) : true,
+    pushMeetingReminders: row ? bool(row.push_meeting_reminders) : true,
+    pushMentions: row ? bool(row.push_mentions) : true,
+    emailMeetingReminders: row ? bool(row.email_meeting_reminders) : true,
+    smsMeetingReminders: row ? bool(row.sms_meeting_reminders) : false,
+    digestCatchUp: row ? bool(row.digest_catch_up) : true,
   };
 }
 
-async function loadMe(db: D1Database, userId: string): Promise<Me> {
+async function loadMe(db: D1Database, userId: string): Promise<MeResponse> {
   const u = await first<{ id: string; username: string; name: string; email: string; emailVerified: number; image: string | null; createdAt: string }>(
     db,
     'SELECT id, username, name, email, "emailVerified", image, "createdAt" FROM "user" WHERE id = ?',
@@ -61,7 +81,7 @@ async function loadMe(db: D1Database, userId: string): Promise<Me> {
   );
   if (!u) throw notFound("Account not found");
   const [p, prefs, clubs] = await Promise.all([
-    first<ProfileRow>(db, "SELECT bio, location, pronouns, favorite_genres, default_visibility, last_club_id FROM profiles WHERE user_id = ?", userId),
+    first<ProfileRow>(db, "SELECT bio, location, pronouns, favorite_genres, default_visibility, last_club_id, phone, sms_opt_in FROM profiles WHERE user_id = ?", userId),
     first<PrefRow>(db, "SELECT * FROM notification_preferences WHERE user_id = ?", userId),
     loadClubSummaries(db, userId),
   ]);
@@ -84,6 +104,8 @@ async function loadMe(db: D1Database, userId: string): Promise<Me> {
     preferences: mapPrefs(prefs),
     clubs,
     lastClubId,
+    phone: p?.phone ?? null,
+    smsOptIn: p ? bool(p.sms_opt_in) : false,
   };
 }
 
@@ -191,15 +213,23 @@ accountRoutes.post("/password", async (c) => {
 
 accountRoutes.put("/preferences", async (c) => {
   const user = c.get("user");
-  const p = await parseBody(c, notificationPreferencesSchema);
+  const p = await parseBody(c, notificationPreferencesSchema.extend(pushPreferencesSchema.shape));
+  // Wave 2 channels are optional in the body; absent keys keep their stored value (or the default).
+  const current = (await first<PrefRow>(c.env.DB, "SELECT * FROM notification_preferences WHERE user_id = ?", user.id)) ?? null;
+  const cur = mapPrefs(current);
+  const pick = (v: boolean | undefined, fallback: boolean) => Number(v ?? fallback);
   await run(
     c.env.DB,
     `INSERT INTO notification_preferences (user_id, inapp_direct_messages, inapp_recommendations, inapp_club_updates, inapp_reactions,
-       email_club_updates, email_recommendations, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+       email_club_updates, email_recommendations, push_enabled, push_meeting_reminders, push_mentions, email_meeting_reminders,
+       sms_meeting_reminders, digest_catch_up, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT (user_id) DO UPDATE SET inapp_direct_messages = excluded.inapp_direct_messages,
        inapp_recommendations = excluded.inapp_recommendations, inapp_club_updates = excluded.inapp_club_updates,
        inapp_reactions = excluded.inapp_reactions, email_club_updates = excluded.email_club_updates,
-       email_recommendations = excluded.email_recommendations, updated_at = excluded.updated_at`,
+       email_recommendations = excluded.email_recommendations, push_enabled = excluded.push_enabled,
+       push_meeting_reminders = excluded.push_meeting_reminders, push_mentions = excluded.push_mentions,
+       email_meeting_reminders = excluded.email_meeting_reminders, sms_meeting_reminders = excluded.sms_meeting_reminders,
+       digest_catch_up = excluded.digest_catch_up, updated_at = excluded.updated_at`,
     user.id,
     Number(p.inappDirectMessages),
     Number(p.inappRecommendations),
@@ -207,7 +237,33 @@ accountRoutes.put("/preferences", async (c) => {
     Number(p.inappReactions),
     Number(p.emailClubUpdates),
     Number(p.emailRecommendations),
+    pick(p.pushEnabled, cur.pushEnabled),
+    pick(p.pushMeetingReminders, cur.pushMeetingReminders),
+    pick(p.pushMentions, cur.pushMentions),
+    pick(p.emailMeetingReminders, cur.emailMeetingReminders),
+    pick(p.smsMeetingReminders, cur.smsMeetingReminders),
+    pick(p.digestCatchUp, cur.digestCatchUp),
     nowIso(),
+  );
+  return c.json(await loadMe(c.env.DB, user.id));
+});
+
+/** Phone number (E.164) and SMS opt-in for meeting reminders. Opting in without a number is rejected. */
+accountRoutes.put("/phone", async (c) => {
+  const user = c.get("user");
+  const input = await parseBody(c, phoneSchema);
+  if (input.smsOptIn && !input.phone) throw badRequest("Add a phone number to receive texts", { phone: ["Required to opt in"] });
+  const now = nowIso();
+  await run(
+    c.env.DB,
+    `INSERT INTO profiles (user_id, phone, sms_opt_in, privacy_accepted_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)
+     ON CONFLICT (user_id) DO UPDATE SET phone = excluded.phone, sms_opt_in = excluded.sms_opt_in, updated_at = excluded.updated_at`,
+    user.id,
+    input.phone,
+    input.phone && input.smsOptIn ? 1 : 0,
+    now,
+    now,
+    now,
   );
   return c.json(await loadMe(c.env.DB, user.id));
 });

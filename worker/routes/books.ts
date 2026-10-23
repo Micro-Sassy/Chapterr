@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { normalizeIsbn } from "../../shared/isbn";
 import {
   bookSearchSchema,
+  editionMappingSchema,
   editionUpdateSchema,
   manualEditionSchema,
   providerEditionSchema,
@@ -14,6 +15,7 @@ import { findExistingEdition, getEditionDetail, searchText, upsertEdition } from
 import { ApiError, notFound } from "../lib/errors";
 import { parseBody, parseWith } from "../lib/http";
 import { editionCols, mapEdition, type Row } from "../lib/mappers";
+import { loadMappings, upsertMapping } from "../lib/mapping";
 import { visibleToViewerSql } from "../lib/club";
 import { escapeLike } from "../lib/util";
 import { updateVersioned } from "../lib/versioned";
@@ -203,7 +205,7 @@ bookRoutes.get("/editions/:id", async (c) => {
   const user = c.get("user");
   const id = c.req.param("id");
   const edition = await getEditionDetail(c.env.DB, id, user.id);
-  const [clubStats, otherEditions] = await Promise.all([
+  const [clubStats, otherEditions, mappings] = await Promise.all([
     // Shelf counts over members who share a club with the viewer (plus the viewer's own entry).
     all<{ status: string; n: number }>(
       c.env.DB,
@@ -218,12 +220,32 @@ bookRoutes.get("/editions/:id", async (c) => {
       edition.bookId,
       id,
     ),
+    loadMappings(c.env.DB, id),
   ]);
   return c.json({
     edition,
     clubStats: Object.fromEntries(clubStats.map((s) => [s.status, s.n])),
     otherEditions: otherEditions.map((r) => mapEdition(r, "e_")),
+    // Feature wave 2 (W1): Kindle location / audio length mappings for reading ranges.
+    mappings: mappings?.mappings ?? [],
   });
+});
+
+// Feature wave 2 (W1): edition mappings (page <-> Kindle location <-> audio time). Any member may set them.
+bookRoutes.get("/editions/:id/mappings", async (c) => {
+  const mappings = await loadMappings(c.env.DB, c.req.param("id"));
+  if (!mappings) throw notFound("Book edition not found");
+  return c.json(mappings);
+});
+
+bookRoutes.put("/editions/:id/mappings", async (c) => {
+  const user = c.get("user");
+  const id = c.req.param("id");
+  const input = await parseBody(c, editionMappingSchema);
+  const existing = await loadMappings(c.env.DB, id);
+  if (!existing) throw notFound("Book edition not found");
+  await upsertMapping(c.env.DB, id, input, user.id);
+  return c.json(await loadMappings(c.env.DB, id));
 });
 
 /** Catalogue metadata is shared club data: any member may correct it (with conflict detection). */
@@ -270,4 +292,26 @@ bookRoutes.put("/editions/:id", async (c) => {
 bookRoutes.get("/recent", async (c) => {
   const rows = await all<Row>(c.env.DB, `SELECT ${editionCols("e", "e_")} FROM book_editions e ORDER BY e.created_at DESC LIMIT 30`);
   return c.json(rows.map((r) => mapEdition(r, "e_")));
+});
+
+// ---------------------------------------------------------------------------
+// Feasibility (W3, docs/FEATURES-2.md §7): can everyone get this book?
+// Appended as a self-contained block (imports are hoisted) so other additions
+// to this file do not collide with it.
+// ---------------------------------------------------------------------------
+import { getFeasibility } from "../lib/feasibility";
+import { parseJsonArray } from "../lib/util";
+
+bookRoutes.get("/editions/:id/feasibility", async (c) => {
+  const id = c.req.param("id");
+  const row = await first<{ id: string; title: string; authors: string; isbn13: string | null; page_count: number | null }>(
+    c.env.DB,
+    "SELECT id, title, authors, isbn13, page_count FROM book_editions WHERE id = ?",
+    id,
+  );
+  if (!row) throw notFound("Book not found");
+  await enforceRateLimit(c.env, "feasibility", c.get("user").id, { window: 60 * 60, max: 60 });
+  const result = await getFeasibility({ id: row.id, title: row.title, authors: parseJsonArray(row.authors), isbn13: row.isbn13, pageCount: row.page_count });
+  c.header("Cache-Control", "private, max-age=3600");
+  return c.json(result);
 });

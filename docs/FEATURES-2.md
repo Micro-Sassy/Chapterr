@@ -30,6 +30,19 @@ Reminders (cron, every 15 min): for each upcoming meeting and each offset in `cl
 
 Recurrence JSON: `{ freq: "weekly"|"biweekly"|"monthly"|"custom", interval?: number, byDay?: number[] (0-6), byMonthDay?: number, nthWeekday?: { n: 1-5|-1, day: 0-6 }, until?: "YYYY-MM-DD", count?: number }`. `worker/lib/recurrence.ts: expand(startsAt, rule, limit)`.
 
+### W1 implementation notes (meetings)
+
+- **Shapes.** `shared/types.ts` was not touched; the superset types live in `shared/types-meetings.ts`: `MeetingFull = Meeting & MeetingExtras` (every list row and every write response) and `MeetingDetail = Meeting & MeetingDetailExtras` (`GET /meetings/:id`, `PUT /roles`, `PUT /attendance`, `POST /copy`). Roles are nested: `meeting.roles.host|picker|notetaker`. RSVP summary also carries `myGuests` and `deadlinePassed`; `attendance.mine` is `null` until anyone is marked.
+- **Schemas.** `POST /meetings` uses `meetingCreateSchema` (wave 1 fields + `locationUrl`, `timezone` (IANA), `rsvpDeadline`, `recurrence`, `autoAssignRoles`, `roles?`); `PUT /meetings/:id` uses `meetingEditSchema` (same fields minus `recurrence`, plus `expectedVersion`). The recurrence rule itself cannot be edited after creation: archive the series (`?scope=all`) and recreate. Explicit `roles` on create apply to every occurrence; `autoAssignRoles` rotates per occurrence.
+- **Scope edits.** `?scope=future|all` applies the non-time fields to the siblings and shifts their start by the same delta as the edited occurrence, keeping the new duration and RSVP lead time. Only the edited occurrence is version-checked; siblings get `version + 1`. `restore?scope=` targets archived siblings. `scope` also works on `archive`/`restore` as documented.
+- **Time zones.** `expandOccurrences(startsAt, rule, timezone, limit = 52)` (not `expand(startsAt, rule, limit)`): the wall clock is taken in the meeting's zone (falls back to `clubs.timezone`, then UTC) so 7 PM stays 7 PM across DST. `custom` with `byDay` behaves weekly; with `byMonthDay`/`nthWeekday` monthly. A `byMonthDay` beyond the month's length clamps to the last day.
+- **Calendar feed.** The public path is `GET /api/public/calendar/:token.ics` (not `/calendar.ics?token=`); `GET /calendar/feed-url` returns `{ url }`. Token = base64url(`userId:clubId:` + base64url(HMAC-SHA256(`BETTER_AUTH_SECRET`, `userId:clubId`))). The feed covers meetings from 90 days ago onward plus assignment due dates as all-day events; anything invalid, or a token for someone no longer a member, is a 404. Events use `DTSTART;TZID=<zone>` without a VTIMEZONE block (Google/Apple/Outlook accept IANA names). Each occurrence is its own VEVENT (`UID = <id>@chapterr.io`); the single-meeting `.ics` of a recurring meeting carries an `RRULE` with `COUNT` = remaining occurrences.
+- **Reminders.** Window is `[start - offset, start - offset + 60 min)` rather than 15 min so a skipped tick still delivers; the `(meeting, offset)` row is claimed with `INSERT OR IGNORE` before sending, so repeated ticks never double-send. Recipients: club members whose RSVP is not `no`, including the creator. In-app via `notifyUsers` (kind `meeting_reminder`, `actorId` null, link `/c/:clubId/meetings/:id`); email via `meetingReminderEmail` (pref `email_meeting_reminders`); push/SMS are W3's fan-out inside `notifyUsers`. The same tick also closes expired polls.
+- **Roles.** `PUT /meetings/:id/roles` is admin+ only (members cannot hand themselves roles). Fairness: fewest assignments of that role, then longest ago, then longest-standing member; the suggestion avoids giving one member two roles when the club has enough people. RSVP changes notify the host (`rsvp_update`, at most once per member per meeting per hour).
+- **Sign-ups.** Any member may create lists/items and edit or delete them; claims are capped by `quantity` (409 `item_taken`); `DELETE /signups/:listId` removes a list; each write returns the updated `SignupList` (version bumped).
+- **Pack.** Cached per meeting (not per viewer), so only club-visible quotes/reviews are included. `?refresh=1` rebuilds. RSVP counts in the pack are always live.
+- **Notification link** for `club_meeting` (new meeting) stays `/c/:clubId/meetings` (the wave 1 contract and test).
+
 ## 2. Polls (W1)
 
 | Method | Path | Notes |
@@ -44,29 +57,63 @@ Recurrence JSON: `{ freq: "weekly"|"biweekly"|"monthly"|"custom", interval?: num
 
 Cron closes polls past `closes_at`.
 
+### W1 implementation notes (polls)
+
+- `GET /polls/:id` exists too. `Poll` gained `allowMemberOptions` (stored in `polls.allow_member_options`, added by `migrations/0004_poll_member_options.sql`; 0003 is untouched). Per-option fields are `votes`, `voters` (`[]` when anonymous) and `mine`; there is no separate `myVotes` array.
+- Options are validated per kind on create and on `POST /:id/options` (book: `editionId` required and must exist; date: `startsAt` required). `closesAt` must be in the future. Max 20 options.
+- `PUT /:id/vote` on a single-choice poll with more than one option id is a 400; voting on a closed poll is 409 `poll_closed`.
+- `POST /:id/apply` (admin+) closes an open poll first; no votes → 409 `no_votes`; already applied → 409 `already_applied`. Body is optional: `{ year?, title? }` (year for book polls, meeting title for date polls). Date polls reuse `polls.meeting_id` when set (the meeting is moved), otherwise create a meeting in the club's zone. The book apply notifies with kind `poll_closed`, the date apply with `club_meeting`.
+- `DELETE /:id` (archive) is admin+ or creator. Rate limit: 20 writes/hour per member across create, add options and vote.
+- `closeExpiredPolls(env, now)` is exported from `worker/routes/polls.ts` and runs from `runMeetingReminders`; it notifies every member (including the creator) with kind `poll_closed`.
+
 ## 3. Chat upgrades (W2)
 
-`Message` gains `parentId`, `replyCount`, `attachments: Attachment[]`, `mentions: MemberSummary[]`, `reactions: { emoji, count, mine }[]`, `kind`. `POST /conversations/:id/messages` body: `messageSchema { body, parentId?, attachmentFileIds?: string[] (max 4, must be files of kind attachment owned by sender in this club) }`; mentions parsed from `@username` tokens, validated against club members; mentioned members get a `mention` notification + push (pref `push_mentions`). `GET /messages/:id/thread` *(paged)* replies. `PUT /messages/:id/reactions { emoji }` toggles (emoji limited to a curated list of 16 in `shared/constants.ts` `MESSAGE_EMOJI`). Photo upload: `POST /api/clubs/:clubId/files` (W3) with `kind: attachment` then reference by id. Realtime events: `message.reaction`, `thread.reply` (parent id + count).
-
-Scheduled messages: `GET /scheduled` (mine), `POST /scheduled { conversationId, body, sendAt }`, `DELETE /scheduled/:id`; cron `runScheduledMessages` posts them as the sender.
-
-Welcome message: when a member joins (W3 calls `postWelcome(env, clubId, userId)` from W2's `worker/lib/welcome.ts`), post `clubs.welcome_message` into the club conversation as a `kind: 'welcome'` system message addressed to the newcomer (body prefixed with `@username`), and send them a DM from the owner with the same text when `welcome_message` is set.
-
-## 4. Discussion rooms, progress, guides (W2)
+Every message endpoint (club chat, DMs, rooms, threads, scheduled sends) returns `ChatMessage = Message & MessageExtras` (`shared/types-chat.ts`): `parentId`, `replyCount`, `attachments: Attachment[]` (`url` = `/api/clubs/:clubId/files/:fileId/content`), `mentions: MemberSummary[]`, `reactions: { emoji, count, mine }[]` (sorted by count, then first reaction), `kind: 'user' | 'system' | 'welcome' | 'digest'`. `Conversation` gains `roomId: string | null` (`ConversationExtras`).
 
 | Method | Path | Notes |
 |---|---|---|
-| GET | `/books/:editionId/rooms` | `DiscussionRoom[]` with `unlocked: boolean` for the viewer and `membersInside` count |
-| POST | `/books/:editionId/rooms` | `roomSchema { kind, title, gateType, gateValue }`; `POST /books/:editionId/rooms/auto { chapters: n }` creates chapter rooms 1..n gated by chapter; reflection room gated by `finished` |
-| GET/PUT | `/books/:editionId/progress` | `progressSchema { chapter?, page?, percent?, finished }` (viewer's club reading position); `GET /books/:editionId/progress/all` member positions (spoiler-safe: just positions) |
-| GET | `/rooms/:roomId` | room + conversation id; entering a gated room the viewer has not reached → `403 room_locked` with the gate |
-| messages | rooms use the normal conversation endpoints (`conversation.room_id` set); posting/reading enforces the gate |
-| GET/PUT | `/books/:editionId/guide` | `DiscussionGuide`; `PUT` with `guideSchema { sections }` |
-| POST | `/books/:editionId/guide/generate { source: 'template'|'ai', chapters? }` | template: 12-18 questions from `worker/lib/prompts.ts` (genre-aware using club genres, title, authors, description); ai: when `ANTHROPIC_API_KEY` is set, `worker/lib/ai.ts` calls the Claude Messages API (model `claude-sonnet-5`, JSON output) with the book's title/authors/description; otherwise `409 ai_unavailable`. Result is saved as the guide (source noted) |
+| GET | `/conversations` | club + direct conversations only (rooms are listed per book); previews ignore replies |
+| GET | `/conversations/:id` | `{ ..., roomId, title }`; a room's title is the room name, `otherMember` null |
+| GET | `/conversations/:id/messages` *(paged)* | top-level messages only (replies live in threads) |
+| POST | `/conversations/:id/messages` | `messageCreateSchema { body, parentId?, attachmentFileIds? }` (body may be empty when a photo is attached). `@username` tokens (case-insensitive) resolve to club members; unknown names are ignored. Attachments must be `files` rows of kind `attachment` owned by the sender in this club (422 otherwise). `parentId` must be a live top-level message in the same conversation (400 for a reply-to-reply, 404 across conversations); the parent's `reply_count` is bumped |
+| GET | `/messages/:id/thread` *(paged, oldest first)* | `{ items, nextCursor, parent }`; `nextCursor` is the newest timestamp on the page |
+| PUT | `/messages/:id/reactions` | `{ emoji }` (one of `MESSAGE_EMOJI`) toggles → `{ messageId, reactions, mine }` |
+| PUT/PATCH | `/messages/:id` | sender only; mentions are re-read from the new text and newly mentioned members notified |
+| DELETE | `/messages/:id` | sender only; body, attachments and mentions are erased (the row stays as "removed"); `reply_count` is not decremented |
+| GET | `/scheduled` | caller's pending sends in this club, soonest first (`ScheduledMessage`, `conversationTitle` = club name / member name / room title) |
+| POST | `/scheduled` | `{ conversationId, body, sendAt }`; `sendAt` 2 min to 90 days ahead (400), same access/gate rules as sending now, max 20 pending per member per club (409 `limit_reached`) |
+| DELETE | `/scheduled/:id` | cancel (own, pending) |
 
-Milestones = rooms of kind `milestone`; questions in the guide may carry `roomId` to appear pinned at the top of that room (`GET /rooms/:id` returns `questions`).
+Notifications: `mention` (link `/c/:clubId/messages/:conversationId?message=:id`, or `/c/:clubId/rooms/:editionId?room=:roomId&message=:id` inside a room), `thread_reply` to the parent's author (unless already mentioned), `reaction` to the author at most once per message per hour (fixed window in `rate_limits`, key `reaction-notify:<messageId>`), `direct_message` as before (skipped for members already notified by a mention). Only members allowed to read the conversation are ever notified (a room's audience is its unlocked members).
 
-Catch-up digest (cron, daily 13:00 UTC): for each member with `digest_catch_up` and ≥ 10 unread messages in a club/room conversation since `last_read_at`, build a progress-gated summary: list rooms/threads with counts, the 5 most-reacted messages they are allowed to see (never from rooms they have not unlocked), and send as an in-app notification + email (`digestEmail`). Record `digest_deliveries`.
+Realtime (`RealtimeEventWave2` in `shared/types-chat.ts`, to be unioned with `RealtimeEvent` on the client): `message.reaction { messageId, conversationId, reactions }`, `thread.reply { parentId, conversationId, replyCount, message }` (replies do **not** also emit `message.created`; edits and removals of replies emit `message.updated` with `parentId` set), `progress.updated { editionId, userId, progress }`, `rooms.changed { editionId }`.
+
+Cron (`runScheduledMessages`, every tick): due rows are claimed (`sent_at`) first so overlapping ticks cannot double-send, then posted through `sendMessage` as the sender (mentions, threads, realtime, unread, notifications all apply); `sent_message_id` is recorded. A sender who left the club, or a conversation that is gone or locked (any `ApiError`), gets `canceled_at` instead; transient errors release the claim for the next tick.
+
+Welcome (`worker/lib/welcome.ts: postWelcome(env, clubId, userId)`, called by the join/approve flows): when `clubs.welcome_message` is set, the owner posts a `kind: 'welcome'` message into the club conversation (`@username <message>`, `mentions = [newcomer]`, notification kind `welcome`) and sends the same text as a `welcome` DM (the DM raises no `direct_message` notice). Never throws.
+
+## 4. Discussion rooms, progress, guides (W2)
+
+**Room conversations.** `conversations.kind` is CHECKed to `club|direct` and `club` is unique per club, so a room's conversation is stored as `kind = 'direct'`, `direct_key = 'room:<roomId>'`, `room_id = <roomId>`. Every current member gets a `conversation_participants` row when the room is created; later joiners are added the first time they open the room (`ensureRoomParticipant`). Rooms never appear in `GET /conversations`. Every read and write on a room conversation (messages, read receipts, reactions, threads, scheduled sends) passes the gate check in `authorizeConversation`; the realtime audience of a room is the set of members whose progress satisfies the gate. Admins are **not** exempt. Unread counts (`unreadInClub`, `unreadByClub`) exclude rooms the member has not unlocked (`roomVisibleSql`).
+
+Gate rule (`gateSatisfied` / `gateOpenSql`): `none` always open; `finished` requires `finished`; `chapter|page|percent` require that field ≥ `gateValue`; finishing the book opens every room. A locked room answers `403 { code: "room_locked", message, gate: { type, value }, progress }` (`RoomLockedError`).
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/books/:editionId/rooms` | `DiscussionRoom[]` ordered by position; locked rooms carry title/gate/`membersInside` only (`messageCount: 0`, `lastMessageAt: null`, `questions: []`) |
+| POST | `/books/:editionId/rooms` | admin+ `roomSchema`; `gateValue` required for chapter/page/percent (400); max 60 rooms per book (409) |
+| POST | `/books/:editionId/rooms/auto` | admin+ `{ chapters, reflection = true }` → "Chapter n" rooms gated `chapter = n` plus "Finished the book" (`reflection`, gate `finished`). Idempotent: existing chapter numbers / reflection room are kept; 201 when something was created, else 200. Returns the full list |
+| GET | `/rooms/:roomId` | room + `conversationId` + pinned `questions` (guide questions whose `roomId` is this room); 403 `room_locked` when locked |
+| DELETE | `/rooms/:roomId` | admin+ archive; the conversation becomes unreachable (404) |
+| GET/PUT | `/books/:editionId/progress` | own `ClubReadingProgress`; `PUT progressSchema`. `finished` also sets `percent = 100`, fills `page` from the edition's page count when omitted, marks the member's `user_books` row finished (status, `finished_at` = today, 100%) and logs reading for today in `reading_log` (pages delta, or the remaining pages when finishing). A page increase alone also logs the delta. `?today=YYYY-MM-DD` is the member's local date |
+| GET | `/books/:editionId/progress/all` | `MemberProgress[]`: member summary + `{ chapter, page, percent, finished, updatedAt }` for every member (finished first); nothing else |
+| GET | `/books/:editionId/guide` | `DiscussionGuide` or 404 when none yet |
+| PUT | `/books/:editionId/guide` | admin+ `guideSchema { sections, expectedVersion? }`; creates (201) or updates (200, `source: 'manual'`); when `expectedVersion` is sent it must match (409 with `current`); question ids are kept when unique, otherwise generated; `roomId` must be a live room of this book in this club (400); max 40 questions |
+| POST | `/books/:editionId/guide/generate` | admin+ `{ source: 'template' \| 'ai', chapters? }`, 10/hour per club. `template` (`worker/lib/prompts.ts`): deterministic, genre-aware (club genre tags on the book + title/description keywords), 12-18 questions in "Before you start" (spoiler-free), "While reading" (per chapter block when `chapters` is given or inferred from chapter rooms, each block pinned to the chapter room whose gate matches), "At the end" (pinned to the reflection room) and "Beyond the book"; ids `q1..qN`. `ai` (`worker/lib/ai.ts`): needs `ANTHROPIC_API_KEY`, else `409 ai_unavailable { message: "AI guides need an API key; the template guide works without one." }`; POSTs to the Claude Messages API (`claude-sonnet-5`, `max_tokens 1500`, `anthropic-version 2023-06-01`) with a JSON-only system prompt; any network/HTTP/parse/shape failure → `502 ai_failed`; ids `ai1..aiN`, end-of-book sections pinned to the reflection room. Either source replaces the current guide (`source` recorded, version bumped) |
+
+Milestones = rooms of kind `milestone` with any gate.
+
+Catch-up digest (`runCatchUpDigests`, daily 13:00 UTC tick): for each member with `digest_catch_up` on and not muted, each club conversation or **unlocked** room with ≥ 10 unread messages (since `conversation_participants.last_read_at`, or the member's join time, and newer than the last digest's `through_message_id`) and no digest for that conversation in the last 24 h gets rolled into one in-app `digest` notification per club (counts per conversation, link to the club chat or room; actor = latest unread sender) plus a `digestEmail` (counts and the five most-reacted unread messages the member may see) when `email_club_updates` is on. Deliveries are recorded in `digest_deliveries (user_id, conversation_id, delivered_at, through_message_id)`, so re-running a tick, or running again a day later with nothing new, sends nothing.
 
 ## 5. Files, branding, screening, invites, exports (W3)
 
@@ -99,6 +146,7 @@ Catch-up digest (cron, daily 13:00 UTC): for each member with `digest_catch_up` 
 
 - `POST /pace-plans { editionId, meetingId?, startsOn, endsOn?, totalPages?, cadence, restDays, createAssignments: true }` → splits pages evenly by cadence into `schedule` and creates assignments with `from_page/to_page`; `GET /pace-plans/:editionId` returns the plan plus the viewer's personal daily pages (`(toPage - myPage) / daysLeft`, from club progress). `PUT`/`DELETE`.
 - `PUT /api/books/editions/:id/mappings { kind, total, label }` (any member); `Assignment` gains `ranges: { pages, kindle, audio }` computed proportionally from `from_page/to_page` and the edition's `page_count` + mappings (`worker/lib/mapping.ts`).
+- **W1 notes.** The pace routes are mounted inside the meetings router (`/api/clubs/:clubId/pace-plans`). Due dates run from `startsOn` (exclusive) at the cadence (`weekly` 7 days, `twice_weekly` 3/4 days alternating, `daily`), slide past rest days, and always end on `endsOn` (or the meeting's local date when only `meetingId` is given). Pages split evenly with the remainder on the earliest slots. One plan per club per edition (`POST` on an existing one is 409 `duplicate` with the current plan); `PUT /pace-plans/:editionId` (`pacePlanUpdateSchema`, with `expectedVersion`) archives the plan's previous assignments and creates new ones; `DELETE` archives them and removes the plan. `personal` = `{ myPage, pagesLeft, daysLeft, pagesPerDay, onTrack }` from `club_reading_progress` (page, else percent, else 0). `Assignment` responses are `AssignmentWithRanges` (`fromPage`, `toPage`, `pacePlanId`, `ranges`; audio as `h:mm:ss`). Mappings: `GET /api/books/editions/:id/mappings` → `EditionMappings { editionId, pageCount, mappings }`, `PUT` upserts one kind and returns the same; `GET /api/books/editions/:id` also returns `mappings: EditionMapping[]`.
 - Feasibility `GET /api/books/editions/:id/feasibility` → `{ library: { openLibraryLendable, archiveOrgUrl, worldcatUrl }, ebook: { googleBooksPrice?, googleBooksUrl, kindleSearchUrl, kindleUnlimited: 'unknown' }, audio: { libroFmUrl, audibleSearchUrl }, pageCount, estimatedHours }` from Open Library (`availability` API) and Google Books `saleInfo` (free, keyless) with 24 h cache; everything else is a link, labelled best-effort.
 - Bridge: `GET /meetings/:id/share` → `{ text, url, whatsapp, sms, email, copy }` deep links (`https://wa.me/?text=`, `sms:?&body=`, `mailto:`); `POST /bridge/discord { kind: 'meeting'|'poll'|'assignment', id }` admin+ posts to the club's Discord webhook if set (server-side fetch, never exposes the URL).
 - Cross-club: `GET /api/clubs/:id/intelligence?editionId=` → `{ duplicatePicks: [{ clubName, year, status }], suggestions: [{ edition, reason }] }` — the viewer's other clubs' lists/finished books (only titles, never other clubs' members); also surfaced when adding a book to a list (`POST /books` returns `warnings`).
@@ -106,6 +154,8 @@ Catch-up digest (cron, daily 13:00 UTC): for each member with `digest_catch_up` 
 ## 8. Notifications (new kinds)
 
 `meeting_reminder`, `rsvp_update` (host), `poll_opened`, `poll_closed`, `join_request` (admins), `join_approved`, `mention`, `thread_reply`, `reaction`, `digest`, `challenge_update`, `welcome`. Every kind routes through `notifyUsers` which fans out to in-app + push (+ email per prefs).
+
+W1 kinds as implemented: `meeting_reminder` (cron, no actor, link `/c/:clubId/meetings/:id`), `rsvp_update` (to the host only, throttled hourly per member and meeting), `poll_opened` (club, on create), `poll_closed` (club, on manual close, cron close and book apply). Cron notices pass `actorId: null` to `notifyUsers` so the creator is included; `notifyUsers` should keep treating a null actor as "system".
 
 ## 9. Frontend routes (wave 2)
 

@@ -8,21 +8,24 @@ import {
   clubAnnualBookUpdateSchema,
   clubAnnualReorderSchema,
   clubGoalSchema,
-  meetingSchema,
-  meetingUpdateSchema,
   versionSchema,
   yearSchema,
 } from "../../shared/schemas";
-import type { Assignment, ClubActivity, ClubAnnualBook, ClubGoal, Meeting } from "../../shared/types";
+import type { AssignmentWithRanges, ClubActivity, ClubAnnualBook, ClubGoal } from "../../shared/types";
 import type { AppEnv } from "../env";
 import { all, first, run } from "../lib/db";
 import { requireEdition } from "../lib/editions";
 import { ApiError, conflict, notFound } from "../lib/errors";
 import { parseBody, parseWith } from "../lib/http";
-import { auditCols, auditJoins, editionCols, mapAudit, mapEdition, mapEditionOrNull, type Row } from "../lib/mappers";
+import { auditCols, auditJoins, editionCols, mapAudit, mapEdition, type Row } from "../lib/mappers";
+import { computeRanges } from "../lib/mapping";
 import { emailClubUpdate, notifyUsers } from "../lib/notify";
-import { currentYear, formatMeetingTime, localToday, newId, nowIso } from "../lib/util";
+import { currentYear, localToday, newId, nowIso } from "../lib/util";
 import { updateVersioned } from "../lib/versioned";
+import { loadMeeting } from "./meetings";
+
+// Meetings moved to ./meetings (feature wave 2); the loaders stay importable from here for the dashboard.
+export { loadMeeting, loadMeetings } from "./meetings";
 
 /**
  * Shared club content, mounted at /api/clubs/:clubId behind requireClubMember.
@@ -288,157 +291,43 @@ for (const action of ["archive", "restore"] as const) {
 }
 
 // ---------------------------------------------------------------------------
-// Meetings
-// ---------------------------------------------------------------------------
-
-const MEETING_SELECT = `SELECT m.id, m.title, m.starts_at, m.ends_at, m.location, m.details, m.archived_at, ${auditCols("m")}, ${editionCols("e", "e_")}
-  FROM club_meetings m LEFT JOIN book_editions e ON e.id = m.edition_id ${auditJoins("m")}`;
-
-function mapMeeting(r: Row): Meeting {
-  return {
-    id: String(r.id),
-    title: String(r.title),
-    startsAt: String(r.starts_at),
-    endsAt: (r.ends_at as string | null) ?? null,
-    location: (r.location as string | null) ?? null,
-    details: (r.details as string | null) ?? null,
-    edition: mapEditionOrNull(r, "e_"),
-    archivedAt: (r.archived_at as string | null) ?? null,
-    ...mapAudit(r),
-  };
-}
-
-export async function loadMeeting(db: D1Database, clubId: string, id: string): Promise<Meeting | null> {
-  const r = await first<Row>(db, `${MEETING_SELECT} WHERE m.club_id = ? AND m.id = ?`, clubId, id);
-  return r ? mapMeeting(r) : null;
-}
-
-export async function loadMeetings(db: D1Database, clubId: string, where: string, params: string[], order = "m.starts_at", limit = 200): Promise<Meeting[]> {
-  const rows = await all<Row>(db, `${MEETING_SELECT} WHERE m.club_id = ? AND (${where}) ORDER BY ${order} LIMIT ${limit}`, clubId, ...params);
-  return rows.map(mapMeeting);
-}
-
-clubRoutes.get("/meetings", async (c) => {
-  const clubId = c.get("club").id;
-  const when = c.req.query("when") ?? "upcoming";
-  const archived = includeArchived(c.req.query("archived"));
-  const now = nowIso();
-  const base = archived ? "1 = 1" : "m.archived_at IS NULL";
-  if (when === "past") return c.json(await loadMeetings(c.env.DB, clubId, `${base} AND m.starts_at < ?`, [now], "m.starts_at DESC"));
-  if (when === "all") return c.json(await loadMeetings(c.env.DB, clubId, base, [], "m.starts_at DESC"));
-  // "upcoming" includes meetings that started within the last 6 hours.
-  const since = new Date(Date.now() - 6 * 3600 * 1000).toISOString();
-  return c.json(await loadMeetings(c.env.DB, clubId, `${base} AND m.starts_at >= ?`, [since]));
-});
-
-clubRoutes.get("/meetings/:id", async (c) => {
-  const meeting = await loadMeeting(c.env.DB, c.get("club").id, c.req.param("id"));
-  if (!meeting) throw notFound("Meeting not found");
-  return c.json(meeting);
-});
-
-clubRoutes.post("/meetings", async (c) => {
-  const user = c.get("user");
-  const club = c.get("club");
-  const input = await parseBody(c, meetingSchema);
-  if (input.editionId) await requireEdition(c.env.DB, input.editionId);
-  const id = newId();
-  const now = nowIso();
-  await run(
-    c.env.DB,
-    `INSERT INTO club_meetings (id, club_id, title, starts_at, ends_at, location, details, edition_id, created_by, updated_by, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    id,
-    club.id,
-    input.title,
-    new Date(input.startsAt).toISOString(),
-    input.endsAt ? new Date(input.endsAt).toISOString() : null,
-    input.location,
-    input.details,
-    input.editionId,
-    user.id,
-    user.id,
-    now,
-    now,
-  );
-  const meeting = await loadMeeting(c.env.DB, club.id, id);
-  if (meeting) {
-    const title = `New meeting: ${meeting.title}`;
-    const path = `/c/${club.id}/meetings`;
-    c.executionCtx.waitUntil(
-      Promise.all([
-        notifyUsers(c.env, "club", { kind: "club_meeting", clubId: club.id, title, body: meeting.location, link: path, actorId: user.id }),
-        emailClubUpdate(c.env, {
-          clubId: club.id,
-          clubName: club.name,
-          actorId: user.id,
-          heading: title,
-          lines: [
-            `${user.name} scheduled a meeting of ${club.name} for ${formatMeetingTime(meeting.startsAt, c.req.header("x-time-zone"))}.`,
-            ...(meeting.location ? [`Where: ${meeting.location}`] : []),
-          ],
-          path,
-        }),
-      ]),
-    );
-  }
-  return c.json(meeting, 201);
-});
-
-clubRoutes.put("/meetings/:id", async (c) => {
-  const user = c.get("user");
-  const clubId = c.get("club").id;
-  const id = c.req.param("id");
-  const input = await parseBody(c, meetingUpdateSchema);
-  if (input.editionId) await requireEdition(c.env.DB, input.editionId);
-  const meeting = await updateVersioned({
-    db: c.env.DB,
-    table: "club_meetings",
-    id,
-    expectedVersion: input.expectedVersion,
-    userId: user.id,
-    label: "Meeting",
-    set: {
-      title: input.title,
-      starts_at: new Date(input.startsAt).toISOString(),
-      ends_at: input.endsAt ? new Date(input.endsAt).toISOString() : null,
-      location: input.location,
-      details: input.details,
-      edition_id: input.editionId,
-    },
-    where: { club_id: clubId },
-    load: () => loadMeeting(c.env.DB, clubId, id),
-  });
-  return c.json(meeting);
-});
-
-// ---------------------------------------------------------------------------
 // Assignments
 // ---------------------------------------------------------------------------
 
-const ASSIGNMENT_SELECT = `SELECT a.id, a.due_date, a.reading_scope, a.details, a.archived_at, ${auditCols("a")}, ${editionCols("e", "e_")},
-  m.id AS mt_id, m.title AS mt_title, m.starts_at AS mt_starts_at
-  FROM club_assignments a JOIN book_editions e ON e.id = a.edition_id LEFT JOIN club_meetings m ON m.id = a.meeting_id ${auditJoins("a")}`;
+const ASSIGNMENT_SELECT = `SELECT a.id, a.due_date, a.reading_scope, a.details, a.archived_at, a.from_page, a.to_page, a.pace_plan_id, ${auditCols("a")}, ${editionCols("e", "e_")},
+  m.id AS mt_id, m.title AS mt_title, m.starts_at AS mt_starts_at, km.total AS kindle_total, am.total AS audio_total
+  FROM club_assignments a JOIN book_editions e ON e.id = a.edition_id LEFT JOIN club_meetings m ON m.id = a.meeting_id
+  LEFT JOIN edition_mappings km ON km.edition_id = a.edition_id AND km.kind = 'kindle'
+  LEFT JOIN edition_mappings am ON am.edition_id = a.edition_id AND am.kind = 'audio' ${auditJoins("a")}`;
 
-function mapAssignment(r: Row): Assignment {
+const intOrNull = (v: unknown): number | null => (v === null || v === undefined ? null : Number(v));
+
+function mapAssignment(r: Row): AssignmentWithRanges {
+  const edition = mapEdition(r, "e_");
+  const fromPage = intOrNull(r.from_page);
+  const toPage = intOrNull(r.to_page);
   return {
     id: String(r.id),
-    edition: mapEdition(r, "e_"),
+    edition,
     meeting: r.mt_id ? { id: String(r.mt_id), title: String(r.mt_title), startsAt: String(r.mt_starts_at) } : null,
     dueDate: String(r.due_date),
     readingScope: (r.reading_scope as string | null) ?? null,
     details: (r.details as string | null) ?? null,
     archivedAt: (r.archived_at as string | null) ?? null,
     ...mapAudit(r),
+    fromPage,
+    toPage,
+    pacePlanId: (r.pace_plan_id as string | null) ?? null,
+    ranges: computeRanges(fromPage, toPage, { pageCount: edition.pageCount, kindleTotal: intOrNull(r.kindle_total), audioSeconds: intOrNull(r.audio_total) }),
   };
 }
 
-export async function loadAssignment(db: D1Database, clubId: string, id: string): Promise<Assignment | null> {
+export async function loadAssignment(db: D1Database, clubId: string, id: string): Promise<AssignmentWithRanges | null> {
   const r = await first<Row>(db, `${ASSIGNMENT_SELECT} WHERE a.club_id = ? AND a.id = ?`, clubId, id);
   return r ? mapAssignment(r) : null;
 }
 
-export async function loadAssignments(db: D1Database, clubId: string, where: string, params: string[], order = "a.due_date", limit = 200): Promise<Assignment[]> {
+export async function loadAssignments(db: D1Database, clubId: string, where: string, params: string[], order = "a.due_date", limit = 200): Promise<AssignmentWithRanges[]> {
   const rows = await all<Row>(db, `${ASSIGNMENT_SELECT} WHERE a.club_id = ? AND (${where}) ORDER BY ${order} LIMIT ${limit}`, clubId, ...params);
   return rows.map(mapAssignment);
 }
@@ -606,9 +495,8 @@ clubRoutes.put("/activities/:id", async (c) => {
   return c.json(activity);
 });
 
-// Archive / restore for meetings, assignments and activities.
+// Archive / restore for assignments and activities (meetings: see ./meetings, with series scope).
 const archivable = {
-  meetings: { table: "club_meetings", label: "Meeting", load: loadMeeting },
   assignments: { table: "club_assignments", label: "Assignment", load: loadAssignment },
   activities: { table: "club_activities", label: "Activity", load: loadActivity },
 } as const;

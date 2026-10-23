@@ -8,8 +8,10 @@ import type { z } from "zod";
 import { LIMITS } from "@shared/constants";
 import { parseGoodreadsCsv, type GoodreadsParseResult } from "@shared/goodreads";
 import { changeEmailSchema, changePasswordSchema, changeUsernameSchema, profileUpdateSchema } from "@shared/schemas";
-import type { ImportRecord, ImportResult, Me, NotificationPreferences, SessionInfo, ShareLink } from "@shared/types";
+import type { ImportRecord, ImportResult, Me, PushPreferences, SessionInfo, ShareLink } from "@shared/types";
 import { Avatar } from "@/components/Avatar";
+import { PhoneForm, type MeWithContact } from "@/components/growth/PhoneForm";
+import { PushSettings, type MergedPreferences } from "@/components/growth/PushSettings";
 import { Alert, Badge, Button, buttonClass, Card, Checkbox, EmptyState, Field, Input, PageHeader, SectionTitle, Select, Spinner, Tabs, Textarea } from "@/components/ui";
 import { useToast } from "@/components/ui/Toast";
 import { api, ApiRequestError, errorMessage } from "@/lib/api";
@@ -276,7 +278,7 @@ function AccountTab({ me }: { me: Me }) {
 function NotificationsTab({ me }: { me: Me }) {
   const qc = useQueryClient();
   const toast = useToast();
-  const [prefs, setPrefs] = useState<NotificationPreferences>(me.preferences);
+  const [prefs, setPrefs] = useState<MergedPreferences>(me.preferences as MergedPreferences);
   const save = useMutation({
     mutationFn: () => api<Me>("/api/account/preferences", { method: "PUT", body: prefs }),
     onSuccess: (data) => {
@@ -285,28 +287,40 @@ function NotificationsTab({ me }: { me: Me }) {
     },
     onError: (err) => toast(errorMessage(err), "error"),
   });
-  const toggle = (key: keyof NotificationPreferences, label: string) => (
-    <Checkbox label={label} checked={prefs[key]} onChange={(e) => setPrefs({ ...prefs, [key]: e.target.checked })} />
+  const toggle = (key: keyof MergedPreferences, label: string, fallback = false) => (
+    <Checkbox label={label} checked={prefs[key] ?? fallback} onChange={(e) => setPrefs({ ...prefs, [key]: e.target.checked })} />
   );
+  const patchPush = (next: Partial<PushPreferences>) => setPrefs((p) => ({ ...p, ...next }));
   return (
-    <Card className="space-y-5">
-      <div className="space-y-2">
-        <SectionTitle>In the app</SectionTitle>
-        {toggle("inappDirectMessages", "New direct messages")}
-        {toggle("inappRecommendations", "Books recommended to me or the club")}
-        {toggle("inappClubUpdates", "Club updates: meetings, assignments, members joining")}
-        {toggle("inappReactions", "Reactions to my reviews")}
-      </div>
-      <div className="space-y-2">
-        <SectionTitle>By email</SectionTitle>
-        {toggle("emailClubUpdates", "Email me about club meetings and assignments")}
-        {toggle("emailRecommendations", "Email me when someone recommends a book to me")}
-        <p className="text-xs text-ink-muted">Security emails (verification, password resets) are always sent.</p>
-      </div>
-      <Button loading={save.isPending} onClick={() => save.mutate()}>
-        Save preferences
-      </Button>
-    </Card>
+    <div className="space-y-6">
+      <Card className="space-y-5">
+        <div className="space-y-2">
+          <SectionTitle>In the app</SectionTitle>
+          {toggle("inappDirectMessages", "New direct messages")}
+          {toggle("inappRecommendations", "Books recommended to me or the club")}
+          {toggle("inappClubUpdates", "Club updates: meetings, assignments, members joining")}
+          {toggle("inappReactions", "Reactions to my reviews")}
+        </div>
+        <div className="space-y-2">
+          <SectionTitle>By email</SectionTitle>
+          {toggle("emailClubUpdates", "Email me about club meetings and assignments")}
+          {toggle("emailRecommendations", "Email me when someone recommends a book to me")}
+          {toggle("emailMeetingReminders", "Email me meeting reminders at the times my club sets", true)}
+          {toggle("digestCatchUp", "Send a catch-up digest when a club chat gets busy while I am away", true)}
+          <p className="text-xs text-ink-muted">Security emails (verification, password resets) are always sent.</p>
+        </div>
+        <div className="space-y-3">
+          <SectionTitle>Push</SectionTitle>
+          <PushSettings prefs={prefs} onChange={patchPush} />
+        </div>
+        <Button loading={save.isPending} onClick={() => save.mutate()}>
+          Save preferences
+        </Button>
+      </Card>
+      <Card>
+        <PhoneForm me={me as MeWithContact} />
+      </Card>
+    </div>
   );
 }
 

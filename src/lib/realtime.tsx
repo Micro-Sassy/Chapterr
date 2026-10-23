@@ -1,7 +1,8 @@
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router";
-import type { Message, Page, RealtimeEvent } from "@shared/types";
+import type { Message, Page, ReactionSummary, RealtimeEvent, RealtimeEventWave2 } from "@shared/types";
+import { messagesKey, threadKey, type ChatMessage, type MessagePages } from "@/components/chat/types";
 import { useToast } from "@/components/ui/Toast";
 
 type Status = "connecting" | "open" | "closed";
@@ -11,20 +12,106 @@ export function useRealtimeStatus(): Status {
   return useContext(RealtimeContext);
 }
 
+/** Feature wave 2 events (docs/FEATURES-2.md §3), unioned with the original set on the client. */
+export type Wave2Event = RealtimeEventWave2;
+
+type AnyEvent = RealtimeEvent | Wave2Event;
+
 /**
- * Merge a created/updated message into the cached live page of its
- * conversation (chronological order within the page), if that page is loaded.
+ * Chat lists are infinite queries. A conversation's pages are newest-first (new
+ * messages join the first page); a thread's pages are oldest-first (new replies
+ * join the last page). Items are chronological within a page either way.
  */
-export function applyMessageEvent(qc: QueryClient, message: Message) {
-  qc.setQueryData<Page<Message>>(["messages", message.conversationId], (prev) => {
-    if (!prev) return prev;
-    const idx = prev.items.findIndex((m) => m.id === message.id);
+function upsertIntoPages(prev: MessagePages | undefined, message: ChatMessage, appendIfMissing: boolean, appendTo: "first" | "last" = "first"): MessagePages | undefined {
+  if (!prev) return prev;
+  for (let p = 0; p < prev.pages.length; p++) {
+    const page = prev.pages[p];
+    if (!page) continue;
+    const idx = page.items.findIndex((m) => m.id === message.id);
     if (idx >= 0) {
-      const items = prev.items.slice();
-      items[idx] = message;
-      return { ...prev, items };
+      const pages = prev.pages.slice();
+      const items = page.items.slice();
+      // Keep local-only state (a pending flag) out of the merged record.
+      items[idx] = { ...items[idx], ...message, pending: undefined, clientId: undefined, localPreviews: undefined };
+      pages[p] = { ...page, items };
+      return { ...prev, pages };
     }
-    return { ...prev, items: [...prev.items, message] };
+  }
+  if (!appendIfMissing) return prev;
+  const at = appendTo === "first" ? 0 : prev.pages.length - 1;
+  const target = prev.pages[at];
+  if (!target) return { pages: [{ items: [message], nextCursor: null }], pageParams: [null] };
+  const pages = prev.pages.slice();
+  pages[at] = { ...target, items: [...target.items, message] };
+  return { ...prev, pages };
+}
+
+function patchEverywhere(qc: QueryClient, messageId: string, patch: (m: ChatMessage) => ChatMessage) {
+  const apply = (prev: MessagePages | undefined) => {
+    if (!prev) return prev;
+    let changed = false;
+    const pages = prev.pages.map((page) => {
+      const idx = page.items.findIndex((m) => m.id === messageId);
+      const found = page.items[idx];
+      if (idx < 0 || !found) return page;
+      changed = true;
+      const items = page.items.slice();
+      items[idx] = patch(found);
+      return { ...page, items };
+    });
+    return changed ? { ...prev, pages } : prev;
+  };
+  qc.setQueriesData<MessagePages>({ queryKey: ["messages"] }, apply);
+  qc.setQueriesData<MessagePages>({ queryKey: ["thread"] }, apply);
+}
+
+/**
+ * Merge a created/updated message into the cached list it belongs to, if that
+ * list is loaded: the conversation's live pages, or, for a reply, its thread.
+ */
+export function applyMessageEvent(qc: QueryClient, message: ChatMessage) {
+  if (message.parentId) {
+    qc.setQueryData<MessagePages>(threadKey(message.parentId), (prev) => upsertIntoPages(prev, message, true, "last"));
+    // An edited or removed reply may also be cached in the conversation list.
+    qc.setQueryData<MessagePages>(messagesKey(message.conversationId), (prev) => upsertIntoPages(prev, message, false));
+    return;
+  }
+  qc.setQueryData<MessagePages>(messagesKey(message.conversationId), (prev) => upsertIntoPages(prev, message, true));
+}
+
+/** Replace the reaction summary of one message wherever it is cached. */
+export function applyReactionEvent(qc: QueryClient, messageId: string, reactions: ReactionSummary[]) {
+  patchEverywhere(qc, messageId, (m) => ({ ...m, reactions }));
+}
+
+/** Bump the parent's reply count and, when the thread is open, append the reply. */
+export function applyThreadReplyEvent(qc: QueryClient, event: { parentId: string; replyCount: number; message: Message }) {
+  patchEverywhere(qc, event.parentId, (m) => ({ ...m, replyCount: event.replyCount }));
+  const reply: ChatMessage = { ...event.message, parentId: event.parentId };
+  qc.setQueryData<MessagePages>(threadKey(event.parentId), (prev) => upsertIntoPages(prev, reply, true, "last"));
+}
+
+/** Drop an optimistic entry (by its client id) once the server copy has taken its place. */
+export function removeOptimistic(qc: QueryClient, listKey: readonly unknown[], clientId: string) {
+  qc.setQueryData<MessagePages>(listKey, (prev) => {
+    if (!prev) return prev;
+    return { ...prev, pages: prev.pages.map((p) => ({ ...p, items: p.items.filter((m) => m.clientId !== clientId || !m.pending) })) };
+  });
+}
+
+/** Add or replace an optimistic entry at the end of the live page (first page of a conversation, last page of a thread). */
+export function putOptimistic(qc: QueryClient, listKey: readonly unknown[], message: ChatMessage, appendTo: "first" | "last" = "first") {
+  qc.setQueryData<MessagePages>(listKey, (prev) => {
+    const base: MessagePages = prev ?? { pages: [{ items: [], nextCursor: null } as Page<ChatMessage>], pageParams: [null] };
+    const pages = base.pages.slice();
+    const at = appendTo === "first" ? 0 : Math.max(0, pages.length - 1);
+    const live = pages[at] ?? { items: [], nextCursor: null };
+    const idx = live.items.findIndex((m) => m.clientId === message.clientId);
+    const items = live.items.slice();
+    if (idx >= 0) items[idx] = message;
+    else items.push(message);
+    pages[at] = { ...live, items };
+    return { ...base, pages };
   });
 }
 
@@ -64,11 +151,12 @@ export function RealtimeProvider({ clubId, children }: { clubId: string | null; 
         // Catch up on anything missed while disconnected.
         void qc.invalidateQueries({ queryKey: ["conversations", clubId] });
         void qc.invalidateQueries({ queryKey: ["messages"] });
+        void qc.invalidateQueries({ queryKey: ["thread"] });
       };
       ws.onmessage = (e) => {
-        let event: RealtimeEvent;
+        let event: AnyEvent;
         try {
-          event = JSON.parse(String(e.data)) as RealtimeEvent;
+          event = JSON.parse(String(e.data)) as AnyEvent;
         } catch {
           return;
         }
@@ -79,6 +167,22 @@ export function RealtimeProvider({ clubId, children }: { clubId: string | null; 
             void qc.invalidateQueries({ queryKey: ["conversations", clubId] });
             void qc.invalidateQueries({ queryKey: ["club-dashboard", clubId] });
             void qc.invalidateQueries({ queryKey: ["home"] });
+            break;
+          case "message.reaction":
+            applyReactionEvent(qc, event.messageId, event.reactions);
+            break;
+          case "thread.reply":
+            applyThreadReplyEvent(qc, event);
+            break;
+          case "progress.updated":
+            void qc.invalidateQueries({ queryKey: ["progress-all", clubId, event.editionId] });
+            void qc.invalidateQueries({ queryKey: ["progress", clubId, event.editionId] });
+            void qc.invalidateQueries({ queryKey: ["rooms", clubId, event.editionId] });
+            break;
+          case "rooms.changed":
+            void qc.invalidateQueries({ queryKey: ["rooms", clubId, event.editionId] });
+            void qc.invalidateQueries({ queryKey: ["guide", clubId, event.editionId] });
+            void qc.invalidateQueries({ queryKey: ["conversations", clubId] });
             break;
           case "conversation.created":
             void qc.invalidateQueries({ queryKey: ["conversations", clubId] });

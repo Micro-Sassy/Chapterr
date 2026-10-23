@@ -11,6 +11,7 @@ import type { ClubMember, EditionDetail, EditionSummary, Genre, Quote, Review, U
 import { BookCover } from "@/components/BookCover";
 import { BookRow, EditionForm } from "@/components/books";
 import { QuoteCard, QuoteForm, ReviewCard, ReviewForm, VisibilityField } from "@/components/content";
+import { FeasibilityPanel, IntelligenceNotice, MappingsPanel, RoomsLinks } from "@/components/growth/BookPanels";
 import { clubApi } from "@/components/records";
 import { Alert, Badge, Button, Card, Checkbox, EmptyState, Field, Input, LinkButton, SectionTitle, Select, Spinner, Textarea, TextLink } from "@/components/ui";
 import { Dialog } from "@/components/ui/Dialog";
@@ -215,6 +216,7 @@ function AddToClubListForm({ editionId, onDone }: { editionId: string; onDone: (
   return (
     <div className="space-y-4">
       <ClubField clubs={clubs} value={clubId} onChange={setClubId} />
+      <IntelligenceNotice clubId={clubId} editionId={editionId} />
       <Field label="Year">{(id) => <Input id={id} type="number" min={1900} max={2200} value={year} onChange={(e) => setYear(e.target.value)} />}</Field>
       {add.isError && <Alert tone="error">{errorMessage(add.error)}</Alert>}
       <Button icon={ListPlus} loading={add.isPending} onClick={() => add.mutate()}>
@@ -289,6 +291,7 @@ export function BookDetailPage() {
   const { id = "" } = useParams();
   const qc = useQueryClient();
   const toast = useToast();
+  const me = useMe();
   const [dialog, setDialog] = useState<null | "shelf" | "review" | "quote" | "recommend" | "club" | "genres" | "edit">(null);
   const edition = useQuery({
     queryKey: ["edition", id],
@@ -459,6 +462,10 @@ export function BookDetailPage() {
         </ul>
         <p className="mt-2 text-xs text-ink-muted">Plain search links. No tracking or affiliate codes.</p>
       </Card>
+
+      <FeasibilityPanel editionId={e.id} />
+      <MappingsPanel editionId={e.id} pageCount={e.pageCount} />
+      <RoomsLinks editionId={e.id} clubs={me.data?.clubs ?? []} />
 
       {edition.data.otherEditions.length > 0 && (
         <section>
