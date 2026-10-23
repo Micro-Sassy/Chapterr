@@ -2,7 +2,11 @@ import clsx from "clsx";
 import {
   Bell,
   CalendarDays,
+  CalendarRange,
   ChevronsUpDown,
+  Flame,
+  FolderOpen,
+  Gift,
   Home,
   KeyRound,
   LayoutDashboard,
@@ -20,10 +24,12 @@ import {
   Sparkles,
   Star,
   Target,
+  Trophy,
+  type LucideIcon,
   Users,
   UsersRound,
+  Vote,
   WifiOff,
-  type LucideIcon,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
@@ -53,6 +59,7 @@ export const PERSONAL_NAV: NavItem[] = [
   { to: "/library", label: "My library", icon: Library },
   { to: "/books/add", label: "Find books", icon: Search },
   { to: "/goals", label: "Goals", icon: Target },
+  { to: "/reading", label: "Reading log", icon: Flame },
 ];
 
 export function clubNav(clubId: string): NavItem[] {
@@ -60,11 +67,16 @@ export function clubNav(clubId: string): NavItem[] {
     { to: clubPath(clubId), label: "Dashboard", icon: LayoutDashboard, end: true },
     { to: clubPath(clubId, "list"), label: "Reading list", icon: ListOrdered },
     { to: clubPath(clubId, "meetings"), label: "Meetings", icon: CalendarDays },
+    { to: clubPath(clubId, "calendar"), label: "Calendar", icon: CalendarRange },
+    { to: clubPath(clubId, "polls"), label: "Polls", icon: Vote },
     { to: clubPath(clubId, "activities"), label: "Activities", icon: Sparkles },
     { to: clubPath(clubId, "reviews"), label: "Reviews", icon: Star },
     { to: clubPath(clubId, "quotes"), label: "Quotes", icon: Quote },
     { to: clubPath(clubId, "recommend"), label: "Recommendations", icon: Sparkles },
     { to: clubPath(clubId, "messages"), label: "Messages", icon: MessageCircle },
+    { to: clubPath(clubId, "files"), label: "Files", icon: FolderOpen },
+    { to: clubPath(clubId, "challenges"), label: "Challenges", icon: Trophy },
+    { to: clubPath(clubId, "wrapped"), label: "Wrapped", icon: Gift },
     { to: clubPath(clubId, "members"), label: "Members", icon: Users },
     { to: clubPath(clubId, "settings"), label: "Settings", icon: Settings },
   ];

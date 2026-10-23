@@ -11,7 +11,14 @@ import { RegisterPage } from "./routes/auth/Register";
 import { safeNext, SignInPage } from "./routes/auth/SignIn";
 import { BookDetailPage } from "./routes/BookDetail";
 import { ClubDashboardPage } from "./routes/clubs/ClubDashboard";
-import { ActivitiesPage, GenresPage, MeetingsPage } from "./routes/clubs/ClubExtras";
+import { CalendarPage } from "./routes/clubs/Calendar";
+import { ClubChallengesPage } from "./routes/clubs/Challenges";
+import { ActivitiesPage, GenresPage } from "./routes/clubs/ClubExtras";
+import { FilesPage } from "./routes/clubs/Files";
+import { MeetingDetailPage, MeetingsPage } from "./routes/clubs/Meetings";
+import { PollsPage } from "./routes/clubs/Polls";
+import { RoomsPage } from "./routes/clubs/Rooms";
+import { WrappedPage } from "./routes/clubs/Wrapped";
 import { ClubLayout } from "./routes/clubs/ClubLayout";
 import { ClubSettingsPage } from "./routes/clubs/ClubSettings";
 import { ClubQuotesPage, ClubRecommendationsPage, ClubReviewsPage } from "./routes/clubs/Collections";
@@ -26,6 +33,7 @@ import { LibraryPage } from "./routes/Library";
 import { MorePage, NotFoundPage, NotificationsPage } from "./routes/Misc";
 import { PrivacyPage } from "./routes/Privacy";
 import { PublicSharePage } from "./routes/PublicShare";
+import { ReadingPage } from "./routes/Reading";
 import { SettingsPage } from "./routes/Settings";
 import { TermsPage } from "./routes/Terms";
 
@@ -106,6 +114,14 @@ export const routes = [
           { index: true, element: <ClubDashboardPage /> },
           { path: "list", element: <ReadingListPage /> },
           { path: "meetings", element: <MeetingsPage /> },
+          { path: "meetings/:meetingId", element: <MeetingDetailPage /> },
+          { path: "calendar", element: <CalendarPage /> },
+          { path: "polls", element: <PollsPage /> },
+          { path: "polls/:pollId", element: <PollsPage /> },
+          { path: "rooms/:editionId", element: <RoomsPage /> },
+          { path: "files", element: <FilesPage /> },
+          { path: "challenges", element: <ClubChallengesPage /> },
+          { path: "wrapped", element: <WrappedPage /> },
           { path: "activities", element: <ActivitiesPage /> },
           { path: "genres", element: <GenresPage /> },
           { path: "reviews", element: <ClubReviewsPage /> },
@@ -123,6 +139,7 @@ export const routes = [
       { path: "/books/add", element: <AddBookPage /> },
       { path: "/books/:id", element: <BookDetailPage /> },
       { path: "/goals", element: <GoalsPage /> },
+      { path: "/reading", element: <ReadingPage /> },
       { path: "/notifications", element: <NotificationsPage /> },
       { path: "/settings", element: <SettingsPage /> },
       { path: "/more", element: <MorePage /> },
