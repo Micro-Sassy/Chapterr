@@ -175,23 +175,47 @@ export async function requireEdition(db: D1Database, id: string): Promise<void> 
   if (!row) throw notFound("Book edition not found");
 }
 
-export async function genresForBook(db: D1Database, bookId: string): Promise<Genre[]> {
+/** A work's genre tags inside one club. */
+export async function genresForBookInClub(db: D1Database, clubId: string, bookId: string): Promise<Genre[]> {
   const rows = await all<Row>(
     db,
-    `SELECT g.id, g.name, g.slug, g.version, g.archived_at FROM book_genres bg JOIN genres g ON g.id = bg.genre_id
-     WHERE bg.book_id = ? AND g.archived_at IS NULL ORDER BY g.name COLLATE NOCASE`,
+    `SELECT g.id, g.name, g.slug, g.version, g.archived_at, g.club_id FROM book_genres bg JOIN genres g ON g.id = bg.genre_id
+     WHERE bg.club_id = ? AND bg.book_id = ? AND g.archived_at IS NULL ORDER BY g.name COLLATE NOCASE`,
+    clubId,
     bookId,
   );
-  return rows.map((r) => ({
+  return rows.map(mapGenreRow);
+}
+
+/** A work's genre tags across every club the viewer belongs to (book detail page). */
+export async function genresForBook(db: D1Database, viewerId: string, bookId: string): Promise<Genre[]> {
+  const rows = await all<Row>(
+    db,
+    `SELECT g.id, g.name, g.slug, g.version, g.archived_at, g.club_id, c.name AS club_name
+       FROM book_genres bg
+       JOIN genres g ON g.id = bg.genre_id
+       JOIN clubs c ON c.id = bg.club_id AND c.archived_at IS NULL
+       JOIN club_members m ON m.club_id = bg.club_id AND m.user_id = ?
+      WHERE bg.book_id = ? AND g.archived_at IS NULL ORDER BY c.name COLLATE NOCASE, g.name COLLATE NOCASE`,
+    viewerId,
+    bookId,
+  );
+  return rows.map(mapGenreRow);
+}
+
+function mapGenreRow(r: Row): Genre {
+  return {
     id: String(r.id),
     name: String(r.name),
     slug: String(r.slug),
     version: Number(r.version),
     archivedAt: (r.archived_at as string | null) ?? null,
-  }));
+    clubId: String(r.club_id),
+    ...(r.club_name ? { clubName: String(r.club_name) } : {}),
+  };
 }
 
-export async function getEditionDetail(db: D1Database, id: string): Promise<EditionDetail> {
+export async function getEditionDetail(db: D1Database, id: string, viewerId: string): Promise<EditionDetail> {
   const row = await first<Row>(db, "SELECT e.*, e.id AS e_id, e.book_id AS e_book_id, e.title AS e_title, e.subtitle AS e_subtitle, e.authors AS e_authors, e.cover_url AS e_cover_url, e.isbn13 AS e_isbn13, e.published_year AS e_published_year, e.format AS e_format, e.page_count AS e_page_count FROM book_editions e WHERE e.id = ?", id);
   if (!row) throw notFound("Book edition not found");
   const summary = mapEdition(row, "e_");
@@ -207,7 +231,7 @@ export async function getEditionDetail(db: D1Database, id: string): Promise<Edit
     openLibraryId: (row.openlibrary_edition_id as string | null) ?? null,
     source: row.source as EditionDetail["source"],
     version: Number(row.version),
-    genres: await genresForBook(db, summary.bookId),
+    genres: await genresForBook(db, viewerId, summary.bookId),
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at),
     retailerLinks: retailerLinks(summary.isbn13, summary.title, parseJsonArray(row.authors)),

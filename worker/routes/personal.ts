@@ -13,8 +13,9 @@ import {
   userBookSchema,
   yearSchema,
 } from "../../shared/schemas";
-import type { GoalProgress, Recommendation } from "../../shared/types";
+import type { GoalProgress, Quote, Recommendation, Review } from "../../shared/types";
 import type { AppEnv } from "../env";
+import { visibleInClubSql } from "../lib/club";
 import { all, first, run } from "../lib/db";
 import { requireEdition } from "../lib/editions";
 import { ApiError, badRequest, forbidden, notFound } from "../lib/errors";
@@ -22,21 +23,30 @@ import { parseBody, parseWith } from "../lib/http";
 import { finishedCount, loadQuotes, loadReviews, loadUserBooks } from "../lib/loaders";
 import { editionCols, mapEdition, mapMember, mapMemberOrNull, memberCols, type Row } from "../lib/mappers";
 import { emailClubUpdate, notifyUsers } from "../lib/notify";
+import { makePage, pageQuery, timeCursor } from "../lib/paging";
 import { currentYear, newId, nowIso } from "../lib/util";
+import { enforceRateLimit } from "../security/rate-limit";
 
 /**
  * Personal data. Every mutation is scoped with `AND user_id = <session user>`
  * in SQL, so a member can never change another member's records even with a
- * guessed id. Reads apply the private/club visibility rule.
+ * guessed id. Reads apply the visibility rule: private items are owner-only;
+ * "club" items are visible to members who share at least one club with the
+ * owner (visibleToViewerSql in the loaders).
+ *
+ * `clubReviewRoutes`, `clubQuoteRoutes` and `recommendationRoutes` are mounted
+ * under /api/clubs/:clubId behind requireClubMember.
  */
 export const libraryRoutes = new Hono<AppEnv>();
 export const reviewRoutes = new Hono<AppEnv>();
 export const quoteRoutes = new Hono<AppEnv>();
 export const goalRoutes = new Hono<AppEnv>();
 export const recommendationRoutes = new Hono<AppEnv>();
+export const clubReviewRoutes = new Hono<AppEnv>();
+export const clubQuoteRoutes = new Hono<AppEnv>();
 
-async function ownedOr404(db: D1Database, table: string, id: string, userId: string): Promise<Row> {
-  const row = await first<Row>(db, `SELECT * FROM ${table} WHERE id = ?`, id);
+async function ownedOr404(db: D1Database, table: string, id: string, userId: string, clubId?: string): Promise<Row> {
+  const row = await first<Row>(db, `SELECT * FROM ${table} WHERE id = ?${clubId ? " AND club_id = ?" : ""}`, ...(clubId ? [id, clubId] : [id]));
   if (!row) throw notFound();
   if (row.user_id !== userId) throw forbidden("You can only change your own items");
   return row;
@@ -214,9 +224,22 @@ reviewRoutes.get("/", async (c) => {
   return c.json(reviews);
 });
 
+/** Club reviews feed (paged): club-visible reviews by members of this club, plus the viewer's own. */
+clubReviewRoutes.get("/", async (c) => {
+  const user = c.get("user");
+  const clubId = c.get("club").id;
+  const { cursor, limit } = pageQuery(c);
+  if (cursor && !timeCursor(cursor)) throw badRequest("Invalid cursor");
+  const where = `${visibleInClubSql("r")}${cursor ? " AND r.created_at < ?" : ""}`;
+  const params = cursor ? [clubId, user.id, cursor] : [clubId, user.id];
+  const rows = await loadReviews(c.env.DB, user.id, where, params, { limit: limit + 1, order: "r.created_at DESC" });
+  return c.json(makePage<Review>(rows, limit, (r) => r.createdAt));
+});
+
 reviewRoutes.post("/", async (c) => {
   const user = c.get("user");
   const input = await parseBody(c, reviewSchema);
+  await enforceRateLimit(c.env, "review-create", user.id, { window: 60 * 60, max: 30 });
   await requireEdition(c.env.DB, input.editionId);
   const existing = await first<{ id: string }>(c.env.DB, "SELECT id FROM reviews WHERE user_id = ? AND edition_id = ?", user.id, input.editionId);
   if (existing) throw new ApiError(409, "duplicate", "You already reviewed this edition — edit your existing review instead", { current: { id: existing.id } });
@@ -292,6 +315,7 @@ reviewRoutes.post("/:id/reactions", async (c) => {
     c.executionCtx.waitUntil(
       notifyUsers(c.env, [review.author.id], {
         kind: "review_reaction",
+        clubId: null,
         title: `${user.name} reacted to your review of ${review.edition.title}`,
         link: `/books/${review.edition.id}#review-${review.id}`,
         actorId: user.id,
@@ -333,9 +357,22 @@ quoteRoutes.get("/", async (c) => {
   return c.json(await loadQuotes(c.env.DB, user.id, clauses.length ? clauses.join(" AND ") : "1 = 1", params, 300));
 });
 
+/** Club quotes feed (paged): same visibility rule as reviews. */
+clubQuoteRoutes.get("/", async (c) => {
+  const user = c.get("user");
+  const clubId = c.get("club").id;
+  const { cursor, limit } = pageQuery(c);
+  if (cursor && !timeCursor(cursor)) throw badRequest("Invalid cursor");
+  const where = `${visibleInClubSql("q")}${cursor ? " AND q.created_at < ?" : ""}`;
+  const params = cursor ? [clubId, user.id, cursor] : [clubId, user.id];
+  const rows = await loadQuotes(c.env.DB, user.id, where, params, limit + 1);
+  return c.json(makePage<Quote>(rows, limit, (q) => q.createdAt));
+});
+
 quoteRoutes.post("/", async (c) => {
   const user = c.get("user");
   const input = await parseBody(c, quoteSchema);
+  await enforceRateLimit(c.env, "quote-create", user.id, { window: 60 * 60, max: 30 });
   await requireEdition(c.env.DB, input.editionId);
   const id = newId();
   const now = nowIso();
@@ -443,11 +480,12 @@ goalRoutes.delete("/:year", async (c) => {
 });
 
 // ---------------------------------------------------------------------------
-// Recommendations
+// Recommendations (inside a club; mounted at /api/clubs/:clubId/recommendations)
 // ---------------------------------------------------------------------------
 
 export async function loadRecommendations(
   db: D1Database,
+  clubId: string,
   viewerId: string,
   where: string,
   params: string[],
@@ -461,14 +499,16 @@ export async function loadRecommendations(
      JOIN "user" s ON s.id = r.user_id
      LEFT JOIN "user" t ON t.id = r.recipient_user_id
      JOIN book_editions e ON e.id = r.edition_id
-     WHERE (r.recipient_user_id IS NULL OR r.recipient_user_id = ? OR r.user_id = ?) AND (${where})
+     WHERE r.club_id = ? AND (r.recipient_user_id IS NULL OR r.recipient_user_id = ? OR r.user_id = ?) AND (${where})
      ORDER BY r.created_at DESC LIMIT ${limit}`,
+    clubId,
     viewerId,
     viewerId,
     ...params,
   );
   return rows.map((r) => ({
     id: String(r.id),
+    clubId: String(r.club_id),
     recommender: mapMember(r, "s_"),
     recipient: mapMemberOrNull(r, "t_"),
     edition: mapEdition(r, "e_"),
@@ -481,28 +521,38 @@ export async function loadRecommendations(
 
 recommendationRoutes.get("/", async (c) => {
   const user = c.get("user");
+  const clubId = c.get("club").id;
   const scope = c.req.query("scope") ?? "all";
   const where =
     scope === "received" ? "r.recipient_user_id = ?" : scope === "sent" ? "r.user_id = ?" : scope === "club" ? "r.recipient_user_id IS NULL" : "1 = 1";
   const params = scope === "received" || scope === "sent" ? [user.id] : [];
-  return c.json(await loadRecommendations(c.env.DB, user.id, where, params, 200));
+  return c.json(await loadRecommendations(c.env.DB, clubId, user.id, where, params, 200));
 });
 
 recommendationRoutes.post("/", async (c) => {
   const user = c.get("user");
+  const club = c.get("club");
   const input = await parseBody(c, recommendationSchema);
+  await enforceRateLimit(c.env, "recommendation-create", `${club.id}:${user.id}`, { window: 60 * 60, max: 30 });
   await requireEdition(c.env.DB, input.editionId);
   if (input.recipientUserId) {
     if (input.recipientUserId === user.id) throw badRequest("You cannot recommend a book to yourself");
-    const recipient = await first<{ id: string }>(c.env.DB, 'SELECT id FROM "user" WHERE id = ? AND "emailVerified" = 1', input.recipientUserId);
+    // The recipient must be a member of this club.
+    const recipient = await first<{ id: string }>(
+      c.env.DB,
+      'SELECT u.id FROM "user" u JOIN club_members m ON m.user_id = u.id AND m.club_id = ? WHERE u.id = ? AND u."emailVerified" = 1',
+      club.id,
+      input.recipientUserId,
+    );
     if (!recipient) throw notFound("Member not found");
   }
   const id = newId();
   const now = nowIso();
   await run(
     c.env.DB,
-    "INSERT INTO recommendations (id, user_id, edition_id, recipient_user_id, note, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    "INSERT INTO recommendations (id, club_id, user_id, edition_id, recipient_user_id, note, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
     id,
+    club.id,
     user.id,
     input.editionId,
     input.recipientUserId,
@@ -510,27 +560,30 @@ recommendationRoutes.post("/", async (c) => {
     now,
     now,
   );
-  const [rec] = await loadRecommendations(c.env.DB, user.id, "r.id = ?", [id]);
+  const [rec] = await loadRecommendations(c.env.DB, club.id, user.id, "r.id = ?", [id]);
   if (rec) {
-    const title = `${user.name} recommended ${rec.edition.title}${rec.recipient ? " to you" : " to the club"}`;
+    const title = `${user.name} recommended ${rec.edition.title}${rec.recipient ? " to you" : ` to ${club.name}`}`;
+    const path = `/c/${club.id}/recommend`;
     c.executionCtx.waitUntil(
       Promise.all([
-        notifyUsers(c.env, rec.recipient ? [rec.recipient.id] : "all", {
+        notifyUsers(c.env, rec.recipient ? [rec.recipient.id] : "club", {
           kind: "recommendation",
+          clubId: club.id,
           title,
           body: rec.note,
-          link: "/recommendations",
+          link: path,
           actorId: user.id,
         }),
-        emailClubUpdate(
-          c.env,
-          user.id,
-          "New book recommendation",
-          [title + ".", ...(rec.note ? [`“${rec.note}”`] : [])],
-          "/recommendations",
-          "email_recommendations",
-          rec.recipient ? [rec.recipient.id] : undefined,
-        ),
+        emailClubUpdate(c.env, {
+          clubId: club.id,
+          clubName: club.name,
+          actorId: user.id,
+          heading: "New book recommendation",
+          lines: [title + ".", ...(rec.note ? [`“${rec.note}”`] : [])],
+          path,
+          preference: "email_recommendations",
+          onlyUserIds: rec.recipient ? [rec.recipient.id] : undefined,
+        }),
       ]),
     );
   }
@@ -539,18 +592,20 @@ recommendationRoutes.post("/", async (c) => {
 
 recommendationRoutes.put("/:id", async (c) => {
   const user = c.get("user");
+  const clubId = c.get("club").id;
   const id = c.req.param("id");
   const input = await parseBody(c, recommendationUpdateSchema);
-  await ownedOr404(c.env.DB, "recommendations", id, user.id);
-  await run(c.env.DB, "UPDATE recommendations SET note = ?, updated_at = ? WHERE id = ? AND user_id = ?", input.note, nowIso(), id, user.id);
-  const [rec] = await loadRecommendations(c.env.DB, user.id, "r.id = ?", [id]);
+  await ownedOr404(c.env.DB, "recommendations", id, user.id, clubId);
+  await run(c.env.DB, "UPDATE recommendations SET note = ?, updated_at = ? WHERE id = ? AND user_id = ? AND club_id = ?", input.note, nowIso(), id, user.id, clubId);
+  const [rec] = await loadRecommendations(c.env.DB, clubId, user.id, "r.id = ?", [id]);
   return c.json(rec);
 });
 
 recommendationRoutes.delete("/:id", async (c) => {
   const user = c.get("user");
+  const clubId = c.get("club").id;
   const id = c.req.param("id");
-  await ownedOr404(c.env.DB, "recommendations", id, user.id);
-  await run(c.env.DB, "DELETE FROM recommendations WHERE id = ? AND user_id = ?", id, user.id);
+  await ownedOr404(c.env.DB, "recommendations", id, user.id, clubId);
+  await run(c.env.DB, "DELETE FROM recommendations WHERE id = ? AND user_id = ? AND club_id = ?", id, user.id, clubId);
   return c.json({ ok: true });
 });

@@ -4,6 +4,7 @@ import { useState } from "react";
 
 const sizes = { xs: "w-8 h-12", sm: "w-12 h-18", md: "w-20 h-30", lg: "w-32 h-48" };
 
+/** Book covers: 1px Thread border, 4px radius, never reflections (§5). */
 export function BookCover({ url, title, size = "sm", className }: { url: string | null; title: string; size?: keyof typeof sizes; className?: string }) {
   const [failed, setFailed] = useState(false);
   if (!url || failed) {
@@ -12,10 +13,9 @@ export function BookCover({ url, title, size = "sm", className }: { url: string 
         aria-hidden
         title={title}
         className={clsx(
-          // A plain cloth binding: green board, gilt rule and a darker spine.
-          "relative flex shrink-0 items-center justify-center overflow-hidden rounded-[3px] rounded-l-[2px] bg-accent text-gold shadow-[var(--shadow-book)]",
-          "before:absolute before:inset-y-0 before:left-0 before:w-[8%] before:bg-black/20",
-          "after:absolute after:inset-[9%] after:left-[16%] after:rounded-[1px] after:border after:border-gold/50",
+          // A plain cloth binding: Forest board with a Brass title band, like the mark's spines.
+          "relative flex shrink-0 items-center justify-center overflow-hidden rounded-[4px] border border-line bg-primary text-on-primary/80",
+          "before:absolute before:inset-x-0 before:top-[12%] before:h-[6%] before:bg-accent",
           sizes[size],
           className,
         )}
@@ -31,7 +31,7 @@ export function BookCover({ url, title, size = "sm", className }: { url: string 
       loading="lazy"
       referrerPolicy="no-referrer"
       onError={() => setFailed(true)}
-      className={clsx("shrink-0 rounded-[3px] rounded-l-[2px] bg-surface-2 object-cover shadow-[var(--shadow-book)]", sizes[size], className)}
+      className={clsx("shrink-0 rounded-[4px] border border-line bg-surface-2 object-cover", sizes[size], className)}
     />
   );
 }

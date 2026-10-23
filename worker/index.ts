@@ -1,9 +1,11 @@
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { HTTPException } from "hono/http-exception";
+import { APP_NAME, CLUB_PRICE_CENTS } from "../shared/constants";
 import type { ApiErrorBody, PublicConfig } from "../shared/types";
 import type { AppEnv, Env } from "./env";
 import { isProduction } from "./env";
+import { requireClubMember } from "./lib/club";
 import { all, first } from "./lib/db";
 import { ApiError } from "./lib/errors";
 import { requireUser } from "./lib/session";
@@ -11,13 +13,14 @@ import { accountRoutes } from "./routes/account";
 import { authRoutes } from "./routes/auth-guard";
 import { bookRoutes } from "./routes/books";
 import { clubRoutes } from "./routes/club";
-import { dashboardRoutes } from "./routes/dashboard";
-import { genreRoutes } from "./routes/genres";
+import { clubAdminRoutes, clubsRoutes, invitePreview } from "./routes/clubs";
+import { bookGenreRoutes, genreRoutes } from "./routes/genres";
+import { clubHomeRoutes, homeRoutes } from "./routes/home";
 import { importRoutes } from "./routes/imports";
 import { memberRoutes } from "./routes/members";
 import { conversationRoutes, messageRoutes, realtimeUpgrade } from "./routes/messages";
 import { notificationRoutes } from "./routes/notifications";
-import { goalRoutes, libraryRoutes, quoteRoutes, recommendationRoutes, reviewRoutes } from "./routes/personal";
+import { clubQuoteRoutes, clubReviewRoutes, goalRoutes, libraryRoutes, quoteRoutes, recommendationRoutes, reviewRoutes } from "./routes/personal";
 import { publicRoutes, shareRoutes } from "./routes/shares";
 import { purgeRateLimits } from "./security/rate-limit";
 import { requireHttps, sameOriginGuard, securityHeaders } from "./security/headers";
@@ -42,10 +45,13 @@ app.get("/api/health", (c) => c.json({ ok: true }));
 
 app.get("/api/config", (c) => {
   const config: PublicConfig = {
-    appName: c.env.APP_NAME || "Teel Ridge Book Club",
+    appName: c.env.APP_NAME || APP_NAME,
     turnstileSiteKey: c.env.TURNSTILE_SITE_KEY,
     environment: c.env.APP_ENV,
     googleBooksEnabled: !!c.env.GOOGLE_BOOKS_API_KEY,
+    marketingUrl: c.env.MARKETING_URL || "https://chapterr.io",
+    billingEnabled: false,
+    clubPriceCents: CLUB_PRICE_CENTS,
   };
   c.header("Cache-Control", "public, max-age=300");
   return c.json(config);
@@ -53,6 +59,8 @@ app.get("/api/config", (c) => {
 
 app.route("/api/auth", authRoutes);
 app.route("/api/public", publicRoutes);
+// Invite preview works signed out (the join page is where new members land).
+app.get("/api/invites/:code", invitePreview);
 
 /**
  * Development-only mailbox so local testers and E2E tests can open
@@ -75,23 +83,37 @@ app.get("/api/dev/outbox", async (c) => {
 // --- Everything below requires a signed-in, verified member ------------------------
 const api = new Hono<AppEnv>();
 api.use("*", requireUser);
-api.get("/realtime", realtimeUpgrade);
 api.route("/account", accountRoutes);
 api.route("/members", memberRoutes);
 api.route("/books", bookRoutes);
-api.route("/genres", genreRoutes);
 api.route("/library", libraryRoutes);
 api.route("/reviews", reviewRoutes);
 api.route("/quotes", quoteRoutes);
 api.route("/goals", goalRoutes);
-api.route("/recommendations", recommendationRoutes);
-api.route("/club", clubRoutes);
-api.route("/conversations", conversationRoutes);
-api.route("/messages", messageRoutes);
 api.route("/shares", shareRoutes);
 api.route("/notifications", notificationRoutes);
 api.route("/imports", importRoutes);
-api.route("/", dashboardRoutes);
+api.route("/", homeRoutes);
+
+// Club list / create / join (no club context). Registered before the
+// club-scoped router so POST /clubs/join is never read as a club id.
+api.route("/clubs", clubsRoutes);
+
+// --- Club scope: /api/clubs/:clubId/* — membership is checked once, here ---------
+const club = new Hono<AppEnv>();
+club.use("*", requireClubMember);
+club.get("/realtime", realtimeUpgrade);
+club.route("/", clubAdminRoutes);
+club.route("/", clubRoutes);
+club.route("/", clubHomeRoutes);
+club.route("/genres", genreRoutes);
+club.route("/works", bookGenreRoutes);
+club.route("/reviews", clubReviewRoutes);
+club.route("/quotes", clubQuoteRoutes);
+club.route("/recommendations", recommendationRoutes);
+club.route("/conversations", conversationRoutes);
+club.route("/messages", messageRoutes);
+api.route("/clubs/:clubId", club);
 
 api.get("/avatars/:userId", async (c) => {
   const row = await first<{ content_type: string; data: ArrayBuffer }>(
@@ -129,21 +151,30 @@ app.onError((err, c) => {
   return c.json({ error: { code: "server_error", message: "Something went wrong. Please try again." } } satisfies ApiErrorBody, 500);
 });
 
+const DAY = 86400_000;
+
+/** Daily housekeeping (cron trigger in wrangler.jsonc). Exported for tests. */
+export async function runHousekeeping(env: Env, now = new Date()): Promise<void> {
+  const iso = now.toISOString();
+  const ago = (days: number) => new Date(now.getTime() - days * DAY).toISOString();
+  await purgeRateLimits(env.DB);
+  await env.DB.batch([
+    env.DB.prepare('DELETE FROM "verification" WHERE "expiresAt" < ?').bind(iso),
+    env.DB.prepare('DELETE FROM "session" WHERE "expiresAt" < ?').bind(iso),
+    env.DB.prepare("DELETE FROM dev_outbox WHERE created_at < ?").bind(ago(7)),
+    // Expired share links (and links revoked more than 30 days ago).
+    env.DB.prepare("DELETE FROM share_links WHERE (expires_at IS NOT NULL AND expires_at < ?) OR (revoked_at IS NOT NULL AND revoked_at < ?)").bind(iso, ago(30)),
+    env.DB.prepare("DELETE FROM imports WHERE created_at < ?").bind(ago(30)),
+    // Archived clubs are purged after 30 days; every club table cascades from clubs.
+    env.DB.prepare("DELETE FROM clubs WHERE archived_at IS NOT NULL AND archived_at < ?").bind(ago(30)),
+    env.DB.prepare("DELETE FROM notifications WHERE created_at < ?").bind(ago(90)),
+  ]);
+}
+
 export default {
   fetch: app.fetch,
-  /** Optional daily housekeeping (enable with a cron trigger, see README). */
   async scheduled(_event, env, ctx) {
-    ctx.waitUntil(
-      Promise.all([
-        purgeRateLimits(env.DB),
-        env.DB.prepare('DELETE FROM "verification" WHERE "expiresAt" < ?').bind(new Date().toISOString()).run(),
-        env.DB.prepare('DELETE FROM "session" WHERE "expiresAt" < ?').bind(new Date().toISOString()).run(),
-        env.DB.prepare("DELETE FROM dev_outbox WHERE created_at < ?").bind(new Date(Date.now() - 7 * 86400_000).toISOString()).run(),
-        env.DB.prepare("DELETE FROM notifications WHERE read_at IS NOT NULL AND created_at < ?")
-          .bind(new Date(Date.now() - 180 * 86400_000).toISOString())
-          .run(),
-      ]),
-    );
+    ctx.waitUntil(runHousekeeping(env));
   },
 } satisfies ExportedHandler<Env>;
 

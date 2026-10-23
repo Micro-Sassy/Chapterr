@@ -1,4 +1,4 @@
-import { CheckCircle2, AlertCircle, X } from "lucide-react";
+import { AlertCircle, Check, X } from "lucide-react";
 import { createContext, useCallback, useContext, useState, type ReactNode } from "react";
 
 interface ToastItem {
@@ -28,11 +28,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           <div
             key={t.id}
             role={t.tone === "error" ? "alert" : "status"}
-            className="pointer-events-auto flex max-w-md items-center gap-2 rounded-[var(--radius)] border border-line bg-surface px-4 py-3 text-sm shadow-lg"
+            className="pointer-events-auto flex max-w-md items-center gap-2.5 rounded-control border border-line bg-surface px-4 py-3 text-sm text-ink shadow-float"
           >
-            {t.tone === "success" ? <CheckCircle2 className="size-4 shrink-0 text-success" aria-hidden /> : <AlertCircle className="size-4 shrink-0 text-danger" aria-hidden />}
+            {t.tone === "success" ? <Check className="size-4 shrink-0 text-success" aria-hidden /> : <AlertCircle className="size-4 shrink-0 text-error" aria-hidden />}
             <span>{t.message}</span>
-            <button type="button" aria-label="Dismiss" className="ml-2 text-ink-muted" onClick={() => setItems((p) => p.filter((x) => x.id !== t.id))}>
+            <button type="button" aria-label="Dismiss" className="ml-2 rounded-chip text-ink-muted hover:text-ink" onClick={() => setItems((p) => p.filter((x) => x.id !== t.id))}>
               <X className="size-4" aria-hidden />
             </button>
           </div>

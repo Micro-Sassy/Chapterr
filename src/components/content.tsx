@@ -1,21 +1,34 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Copy, Eye, EyeOff, Lock, Pencil, Share2, ThumbsUp, Lightbulb, Laugh, Handshake, Trash2, Users } from "lucide-react";
-import { useRef, useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { useForm, type UseFormRegisterReturn } from "react-hook-form";
 import { Link } from "react-router";
 import type { z } from "zod";
 import { SENTIMENTS, SENTIMENT_LABELS, type ReviewReaction, type ShareResourceType, type Visibility } from "@shared/constants";
 import { quoteUpdateSchema, reviewUpdateSchema, type ShareCreateInput } from "@shared/schemas";
-import type { Quote, Review, ShareLinkCreated } from "@shared/types";
+import type { MemberSummary, Quote, Review, ShareLinkCreated } from "@shared/types";
 import { api, errorMessage } from "@/lib/api";
+import { clubPath, useCurrentClubId } from "@/lib/club";
 import { formatDate } from "@/lib/format";
 import { Avatar } from "./Avatar";
 import { BookRow } from "./books";
 import { Turnstile, type TurnstileHandle } from "./Turnstile";
-import { Alert, Badge, Button, Card, Checkbox, cx, Field, IconButton, Input, Select, Textarea } from "./ui";
+import { Alert, Badge, Button, Card, Checkbox, cx, Field, IconButton, Input, Select, Textarea, type BadgeTone } from "./ui";
 import { Dialog } from "./ui/Dialog";
 import { useToast } from "./ui/Toast";
+
+/** A member's name linking to their profile inside the current club (plain text when no club is in scope). */
+export function MemberLink({ member, className, children }: { member: Pick<MemberSummary, "username" | "displayName">; className?: string; children?: ReactNode }) {
+  const clubId = useCurrentClubId();
+  const content = children ?? member.displayName;
+  if (!clubId) return <span className={className}>{content}</span>;
+  return (
+    <Link to={clubPath(clubId, `members/${encodeURIComponent(member.username)}`)} className={cx("hover:underline", className)}>
+      {content}
+    </Link>
+  );
+}
 
 export function VisibilityBadge({ visibility }: { visibility: Visibility }) {
   return visibility === "private" ? (
@@ -23,18 +36,18 @@ export function VisibilityBadge({ visibility }: { visibility: Visibility }) {
       <Lock className="size-3" aria-hidden /> Private
     </Badge>
   ) : (
-    <Badge tone="accent">
-      <Users className="size-3" aria-hidden /> Club
+    <Badge tone="info">
+      <Users className="size-3" aria-hidden /> Clubs
     </Badge>
   );
 }
 
 export function VisibilityField({ field, error }: { field: UseFormRegisterReturn; error?: string }) {
   return (
-    <Field label="Who can see this?" error={error}>
+    <Field label="Who can see this" error={error}>
       {(id) => (
         <Select id={id} {...field}>
-          <option value="club">Club members</option>
+          <option value="club">Members of my clubs</option>
           <option value="private">Only me</option>
         </Select>
       )}
@@ -45,7 +58,7 @@ export function VisibilityField({ field, error }: { field: UseFormRegisterReturn
 const reactionIcons: Record<ReviewReaction, typeof ThumbsUp> = { like: ThumbsUp, insightful: Lightbulb, funny: Laugh, agree: Handshake };
 const reactionLabels: Record<ReviewReaction, string> = { like: "Like", insightful: "Insightful", funny: "Funny", agree: "Agree" };
 
-export const sentimentTone = (s: Review["sentiment"]) => (s === "loved" || s === "liked" ? "accent" : s === "mixed" ? "highlight" : "danger");
+export const sentimentTone = (s: Review["sentiment"]): BadgeTone => (s === "loved" || s === "liked" ? "success" : s === "mixed" ? "brass" : "error");
 
 // --- Reviews ------------------------------------------------------------------------------
 
@@ -63,19 +76,19 @@ export function ReviewForm({ review, editionId, onDone }: { review?: Review; edi
       review ? api<Review>(`/api/reviews/${review.id}`, { method: "PUT", body: values }) : api<Review>("/api/reviews", { body: { ...values, editionId } }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["reviews"] });
-      toast(review ? "Review updated" : "Review saved");
+      toast(review ? "Review updated." : "Review saved.");
       onDone();
     },
   });
   return (
     <form onSubmit={form.handleSubmit((v) => save.mutate(v))} className="space-y-4" noValidate>
       <fieldset>
-        <legend className="mb-2 text-sm font-medium">How did you feel about it?</legend>
+        <legend className="mb-2 text-sm font-medium">How did it land</legend>
         <div className="flex flex-wrap gap-2">
           {SENTIMENTS.map((s) => (
             <label key={s} className="cursor-pointer">
               <input type="radio" value={s} className="peer sr-only" {...form.register("sentiment")} />
-              <span className="inline-flex rounded-full border border-line px-3 py-1.5 text-sm peer-checked:border-accent peer-checked:bg-accent-soft peer-checked:font-semibold peer-checked:text-accent-strong peer-focus-visible:outline-2 peer-focus-visible:outline-[var(--focus-ring)]">
+              <span className="inline-flex rounded-control border border-line px-3 py-1.5 text-sm peer-checked:border-ink peer-checked:bg-primary peer-checked:font-semibold peer-checked:text-on-primary peer-focus-visible:outline-2 peer-focus-visible:outline-[var(--color-focus)]">
                 {SENTIMENT_LABELS[s]}
               </span>
             </label>
@@ -87,7 +100,7 @@ export function ReviewForm({ review, editionId, onDone }: { review?: Review; edi
       </Field>
       <div className="grid gap-3 sm:grid-cols-2">
         <VisibilityField field={form.register("visibility")} />
-        <div className="flex items-end pb-2">
+        <div className="flex items-end pb-3">
           <Checkbox label="Contains spoilers" {...form.register("containsSpoilers")} />
         </div>
       </div>
@@ -107,9 +120,7 @@ export function ReviewCard({ review, showBook = false }: { review: Review; showB
   const [reveal, setReveal] = useState(false);
   const react = useMutation({
     mutationFn: ({ reaction, mine }: { reaction: ReviewReaction; mine: boolean }) =>
-      mine
-        ? api<Review>(`/api/reviews/${review.id}/reactions/${reaction}`, { method: "DELETE" })
-        : api<Review>(`/api/reviews/${review.id}/reactions`, { body: { reaction } }),
+      mine ? api<Review>(`/api/reviews/${review.id}/reactions/${reaction}`, { method: "DELETE" }) : api<Review>(`/api/reviews/${review.id}/reactions`, { body: { reaction } }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["reviews"] }),
     onError: (err) => toast(errorMessage(err), "error"),
   });
@@ -117,7 +128,7 @@ export function ReviewCard({ review, showBook = false }: { review: Review; showB
     mutationFn: () => api(`/api/reviews/${review.id}`, { method: "DELETE" }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["reviews"] });
-      toast("Review deleted");
+      toast("Review deleted.");
     },
   });
   const hidden = review.containsSpoilers && !reveal && !review.isOwn;
@@ -127,15 +138,12 @@ export function ReviewCard({ review, showBook = false }: { review: Review; showB
         <Avatar member={review.author} />
         <div className="min-w-0 flex-1">
           <p className="text-sm">
-            <Link to={`/members/${review.author.username}`} className="font-medium hover:underline">
-              {review.author.displayName}
-            </Link>{" "}
-            <span className="text-ink-muted">· {formatDate(review.createdAt)}</span>
+            <MemberLink member={review.author} className="font-medium" /> <span className="text-ink-muted">· {formatDate(review.createdAt)}</span>
             {review.updatedAt !== review.createdAt && <span className="text-xs text-ink-muted"> (edited)</span>}
           </p>
           <div className="mt-1 flex flex-wrap gap-1.5">
             <Badge tone={sentimentTone(review.sentiment)}>{SENTIMENT_LABELS[review.sentiment]}</Badge>
-            {review.containsSpoilers && <Badge tone="highlight">Spoilers</Badge>}
+            {review.containsSpoilers && <Badge tone="brass">Spoilers</Badge>}
             {review.isOwn && <VisibilityBadge visibility={review.visibility} />}
           </div>
         </div>
@@ -153,7 +161,7 @@ export function ReviewCard({ review, showBook = false }: { review: Review; showB
           Show review with spoilers
         </Button>
       ) : review.body ? (
-        <p className="whitespace-pre-wrap text-sm leading-relaxed">{review.body}</p>
+        <p className="whitespace-pre-wrap text-[15px] leading-relaxed">{review.body}</p>
       ) : null}
       {review.containsSpoilers && reveal && !review.isOwn && (
         <Button variant="ghost" size="sm" icon={EyeOff} onClick={() => setReveal(false)}>
@@ -171,8 +179,8 @@ export function ReviewCard({ review, showBook = false }: { review: Review; showB
               disabled={react.isPending}
               onClick={() => react.mutate({ reaction: r.reaction, mine: r.mine })}
               className={cx(
-                "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs",
-                r.mine ? "border-accent bg-accent-soft text-accent-strong" : "border-line text-ink-muted hover:bg-surface-2",
+                "inline-flex items-center gap-1 rounded-chip border px-2.5 py-1 text-xs font-medium",
+                r.mine ? "border-ink bg-primary text-on-primary" : "border-line text-ink-muted hover:bg-surface-2",
               )}
             >
               <Icon className="size-3.5" aria-hidden />
@@ -204,14 +212,14 @@ export function QuoteForm({ quote, editionId, onDone }: { quote?: Quote; edition
       quote ? api<Quote>(`/api/quotes/${quote.id}`, { method: "PUT", body: values }) : api<Quote>("/api/quotes", { body: { ...values, editionId } }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["quotes"] });
-      toast(quote ? "Quote updated" : "Quote saved");
+      toast(quote ? "Quote updated." : "Quote saved.");
       onDone();
     },
   });
   return (
     <form onSubmit={form.handleSubmit((v) => save.mutate(v))} className="space-y-4" noValidate>
       <Field label="Quotation" error={form.formState.errors.text?.message}>
-        {(id) => <Textarea id={id} rows={5} className="font-serif" {...form.register("text")} />}
+        {(id) => <Textarea id={id} rows={5} className="font-display text-lg" {...form.register("text")} />}
       </Field>
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Page or location" error={form.formState.errors.location?.message}>
@@ -239,17 +247,15 @@ export function QuoteCard({ quote, showBook = true }: { quote: Quote; showBook?:
     mutationFn: () => api(`/api/quotes/${quote.id}`, { method: "DELETE" }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["quotes"] });
-      toast("Quote deleted");
+      toast("Quote deleted.");
     },
   });
   return (
     <Card as="article" className="space-y-3">
-      <blockquote className="border-l-4 border-accent pl-4 font-serif text-lg leading-relaxed whitespace-pre-wrap">{quote.text}</blockquote>
+      <blockquote className="border-l-2 border-accent pl-4 font-display text-xl leading-relaxed whitespace-pre-wrap">{quote.text}</blockquote>
       <div className="flex flex-wrap items-center gap-2 text-xs text-ink-muted">
         <Avatar member={quote.author} size="xs" />
-        <Link to={`/members/${quote.author.username}`} className="hover:underline">
-          {quote.author.displayName}
-        </Link>
+        <MemberLink member={quote.author} />
         {quote.location && <span>· {quote.location}</span>}
         <span>· {formatDate(quote.createdAt)}</span>
         {quote.isOwn && <VisibilityBadge visibility={quote.visibility} />}
@@ -261,7 +267,7 @@ export function QuoteCard({ quote, showBook = true }: { quote: Quote; showBook?:
           </span>
         )}
       </div>
-      {quote.note && <p className="rounded-lg bg-surface-2 px-3 py-2 text-sm text-ink-muted">Note: {quote.note}</p>}
+      {quote.note && <p className="rounded-control bg-surface-2 px-3 py-2 text-sm text-ink-muted">Note: {quote.note}</p>}
       {showBook && <BookRow edition={quote.edition} />}
       <Dialog open={editing} onClose={() => setEditing(false)} title="Edit quote">
         <QuoteForm quote={quote} editionId={quote.edition.id} onDone={() => setEditing(false)} />
@@ -312,7 +318,7 @@ export function ShareDialog({
     <Dialog open={open} onClose={close} title="Share publicly">
       {created ? (
         <div className="space-y-3">
-          <Alert tone="success">Anyone with this link can view {label}. Copy it now — for security it is only shown once.</Alert>
+          <Alert tone="success">Anyone with this link can view {label}. Copy it now; for safety it is shown only once.</Alert>
           <div className="flex gap-2">
             <Input readOnly value={created.url} aria-label="Share link" onFocus={(e) => e.currentTarget.select()} />
             <Button
@@ -326,13 +332,12 @@ export function ShareDialog({
               {copied ? "Copied" : "Copy"}
             </Button>
           </div>
-          <p className="text-xs text-ink-muted">You can turn this link off at any time in Settings → Share links.</p>
+          <p className="text-xs text-ink-muted">You can turn this link off at any time in Settings, under Share links.</p>
         </div>
       ) : (
         <div className="space-y-4">
           <p className="text-sm">
-            Create a public link to {label}. People who open it will see only that content and your display name — never your email, private notes,
-            or any messages.
+            Create a public link to {label}. People who open it see only that content and your display name, never your email, private notes or any messages.
           </p>
           <Field label="Link expires">
             {(id) => (

@@ -1,6 +1,6 @@
 import { betterAuth } from "better-auth";
 import { username } from "better-auth/plugins";
-import { LIMITS } from "../../shared/constants";
+import { APP_NAME, LIMITS } from "../../shared/constants";
 import { isValidUsername } from "../../shared/schemas";
 import { createEmailProvider } from "../email";
 import {
@@ -22,7 +22,7 @@ function buildAuth(env: Env) {
   const r = (window: number, max: number) => scaleRule(env, { window, max });
 
   return betterAuth({
-    appName: env.APP_NAME || "Teel Ridge Book Club",
+    appName: env.APP_NAME || APP_NAME,
     baseURL,
     basePath: "/api/auth",
     secret: env.BETTER_AUTH_SECRET,
@@ -102,7 +102,7 @@ function buildAuth(env: Env) {
     },
 
     advanced: {
-      cookiePrefix: "trbc",
+      cookiePrefix: "chapterr",
       useSecureCookies: production || baseURL.startsWith("https://"),
       defaultCookieAttributes: { httpOnly: true, sameSite: "lax", path: "/" },
       ipAddress: { ipAddressHeaders: ["cf-connecting-ip"] },

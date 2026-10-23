@@ -1,7 +1,6 @@
 import { Hono } from "hono";
 import { normalizeIsbn } from "../../shared/isbn";
 import {
-  bookGenresSchema,
   bookSearchSchema,
   editionUpdateSchema,
   manualEditionSchema,
@@ -11,11 +10,12 @@ import {
 import type { BookSearchResponse, CatalogResult, EditionSummary } from "../../shared/types";
 import type { AppEnv } from "../env";
 import { all, first, placeholders } from "../lib/db";
-import { findExistingEdition, getEditionDetail, genresForBook, searchText, upsertEdition } from "../lib/editions";
-import { ApiError, badRequest, notFound } from "../lib/errors";
+import { findExistingEdition, getEditionDetail, searchText, upsertEdition } from "../lib/editions";
+import { ApiError, notFound } from "../lib/errors";
 import { parseBody, parseWith } from "../lib/http";
 import { editionCols, mapEdition, type Row } from "../lib/mappers";
-import { escapeLike, nowIso } from "../lib/util";
+import { visibleToViewerSql } from "../lib/club";
+import { escapeLike } from "../lib/util";
 import { updateVersioned } from "../lib/versioned";
 import { fetchProviderEdition, searchCatalog } from "../providers/catalog";
 import { ProviderError, safeCoverUrl, type NormalizedEdition } from "../providers/types";
@@ -136,14 +136,14 @@ bookRoutes.post("/editions/provider", async (c) => {
       openLibraryId: input.provider === "open_library" ? input.providerId : null,
       isbn13: input.hint?.isbn13 ?? null,
     });
-    if (existing) return c.json(await getEditionDetail(c.env.DB, existing));
+    if (existing) return c.json(await getEditionDetail(c.env.DB, existing, user.id));
 
     // Save straight away from the search result, then enrich in the background
     // so opening a book never waits on slow catalogue APIs.
     if (input.hint) {
       const { id, created } = await upsertEdition(c.env.DB, hintToNormalized(input.provider, input.providerId, input.hint), user.id);
       c.executionCtx.waitUntil(enrichEdition(c.env, input.provider, input.providerId, user.id));
-      return c.json(await getEditionDetail(c.env.DB, id), created ? 201 : 200);
+      return c.json(await getEditionDetail(c.env.DB, id, user.id), created ? 201 : 200);
     }
   }
 
@@ -155,7 +155,7 @@ bookRoutes.post("/editions/provider", async (c) => {
     throw new ApiError(502, "provider_error", "The book catalogue is unavailable right now. Try again, or add the book manually.");
   }
   const { id, created } = await upsertEdition(c.env.DB, data, user.id);
-  return c.json(await getEditionDetail(c.env.DB, id), created ? 201 : 200);
+  return c.json(await getEditionDetail(c.env.DB, id, user.id), created ? 201 : 200);
 });
 
 function manualToNormalized(input: ReturnType<typeof manualEditionSchema.parse>): NormalizedEdition {
@@ -196,18 +196,20 @@ bookRoutes.post("/editions", async (c) => {
     }
   }
   const { id } = await upsertEdition(c.env.DB, normalized, user.id);
-  return c.json(await getEditionDetail(c.env.DB, id), 201);
+  return c.json(await getEditionDetail(c.env.DB, id, user.id), 201);
 });
 
 bookRoutes.get("/editions/:id", async (c) => {
   const user = c.get("user");
   const id = c.req.param("id");
-  const edition = await getEditionDetail(c.env.DB, id);
+  const edition = await getEditionDetail(c.env.DB, id, user.id);
   const [clubStats, otherEditions] = await Promise.all([
+    // Shelf counts over members who share a club with the viewer (plus the viewer's own entry).
     all<{ status: string; n: number }>(
       c.env.DB,
-      "SELECT status, COUNT(*) AS n FROM user_books WHERE edition_id = ? AND (visibility = 'club' OR user_id = ?) GROUP BY status",
+      `SELECT ub.status, COUNT(*) AS n FROM user_books ub WHERE ub.edition_id = ? AND ${visibleToViewerSql("ub")} GROUP BY ub.status`,
       id,
+      user.id,
       user.id,
     ),
     all<Row>(
@@ -259,36 +261,9 @@ bookRoutes.put("/editions/:id", async (c) => {
       cover_url_large: n.coverUrl,
       search_text: searchText(n),
     },
-    load: () => getEditionDetail(c.env.DB, id).catch(() => null),
+    load: () => getEditionDetail(c.env.DB, id, user.id).catch(() => null),
   });
   return c.json(detail);
-});
-
-/** Replace the club's genre tags on a work (shared data; any member). */
-bookRoutes.put("/works/:bookId/genres", async (c) => {
-  const user = c.get("user");
-  const bookId = c.req.param("bookId");
-  const { genreIds } = await parseBody(c, bookGenresSchema);
-  const book = await first<{ id: string }>(c.env.DB, "SELECT id FROM books WHERE id = ?", bookId);
-  if (!book) throw notFound("Book not found");
-  const unique = Array.from(new Set(genreIds));
-  if (unique.length) {
-    const found = await all<{ id: string }>(
-      c.env.DB,
-      `SELECT id FROM genres WHERE archived_at IS NULL AND id IN (${placeholders(unique.length)})`,
-      ...unique,
-    );
-    if (found.length !== unique.length) throw badRequest("One or more genres no longer exist");
-  }
-  const now = nowIso();
-  await c.env.DB.batch([
-    // Archived genres are hidden from the picker, so keep their existing tags.
-    c.env.DB.prepare("DELETE FROM book_genres WHERE book_id = ? AND genre_id IN (SELECT id FROM genres WHERE archived_at IS NULL)").bind(bookId),
-    ...unique.map((g) =>
-      c.env.DB.prepare("INSERT INTO book_genres (book_id, genre_id, created_by, created_at) VALUES (?, ?, ?, ?)").bind(bookId, g, user.id, now),
-    ),
-  ]);
-  return c.json(await genresForBook(c.env.DB, bookId));
 });
 
 /** Recently added editions (for browsing the club catalogue). */

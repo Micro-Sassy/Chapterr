@@ -135,7 +135,7 @@ const guard: MiddlewareHandler<AppEnv> = async (c, next) => {
     case "/sign-out": {
       // Close realtime sockets for the session that is ending.
       const session = await getAuth(env).api.getSession({ headers: c.req.raw.headers });
-      if (session) c.executionCtx.waitUntil(disconnectSession(env, session.session.id));
+      if (session) c.executionCtx.waitUntil(disconnectSession(env, session.user.id, session.session.id));
       break;
     }
   }

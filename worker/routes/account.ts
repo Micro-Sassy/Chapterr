@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import {
   avatarUploadSchema,
+  idSchema,
   changeEmailSchema,
   changePasswordSchema,
   changeUsernameSchema,
@@ -14,10 +15,12 @@ import { getAuth } from "../auth/auth";
 import type { AppEnv } from "../env";
 import { all, bool, first, run } from "../lib/db";
 import { ApiError, badRequest, notFound } from "../lib/errors";
+import { confirmPassword } from "../lib/confirm";
 import { parseBody } from "../lib/http";
 import { base64ToBytes, nowIso } from "../lib/util";
 import { disconnectSession, disconnectUser } from "../realtime/publish";
 import { enforceRateLimit } from "../security/rate-limit";
+import { loadClubSummaries } from "./clubs";
 
 export const accountRoutes = new Hono<AppEnv>();
 
@@ -27,6 +30,7 @@ interface ProfileRow {
   pronouns: string | null;
   favorite_genres: string | null;
   default_visibility: "private" | "club";
+  last_club_id: string | null;
 }
 
 interface PrefRow {
@@ -56,8 +60,12 @@ async function loadMe(db: D1Database, userId: string): Promise<Me> {
     userId,
   );
   if (!u) throw notFound("Account not found");
-  const p = await first<ProfileRow>(db, "SELECT bio, location, pronouns, favorite_genres, default_visibility FROM profiles WHERE user_id = ?", userId);
-  const prefs = await first<PrefRow>(db, "SELECT * FROM notification_preferences WHERE user_id = ?", userId);
+  const [p, prefs, clubs] = await Promise.all([
+    first<ProfileRow>(db, "SELECT bio, location, pronouns, favorite_genres, default_visibility, last_club_id FROM profiles WHERE user_id = ?", userId),
+    first<PrefRow>(db, "SELECT * FROM notification_preferences WHERE user_id = ?", userId),
+    loadClubSummaries(db, userId),
+  ]);
+  const lastClubId = p?.last_club_id && clubs.some((club) => club.id === p.last_club_id) ? p.last_club_id : null;
   return {
     id: u.id,
     username: u.username,
@@ -74,17 +82,9 @@ async function loadMe(db: D1Database, userId: string): Promise<Me> {
       defaultVisibility: p?.default_visibility ?? "club",
     },
     preferences: mapPrefs(prefs),
+    clubs,
+    lastClubId,
   };
-}
-
-/** Re-check the member's current password before a sensitive change. */
-async function confirmPassword(c: { env: AppEnv["Bindings"]; req: { raw: Request } }, userId: string, password: string) {
-  await enforceRateLimit(c.env, "password-confirm", userId, { window: 15 * 60, max: 10 });
-  try {
-    await getAuth(c.env).api.verifyPassword({ body: { password }, headers: c.req.raw.headers });
-  } catch {
-    throw new ApiError(400, "invalid_password", "Your current password is incorrect", { fields: { currentPassword: ["Incorrect password"] } });
-  }
 }
 
 function authErrorMessage(err: unknown, fallback: string): string {
@@ -96,6 +96,21 @@ function authErrorMessage(err: unknown, fallback: string): string {
 }
 
 accountRoutes.get("/me", async (c) => c.json(await loadMe(c.env.DB, c.get("user").id)));
+
+/** Remember the club to open next time the app starts. */
+accountRoutes.put("/last-club", async (c) => {
+  const user = c.get("user");
+  const { clubId } = await parseBody(c, z.object({ clubId: idSchema }));
+  const member = await first<{ n: number }>(
+    c.env.DB,
+    "SELECT 1 AS n FROM club_members m JOIN clubs c ON c.id = m.club_id AND c.archived_at IS NULL WHERE m.club_id = ? AND m.user_id = ?",
+    clubId,
+    user.id,
+  );
+  if (!member) throw notFound("Club not found");
+  await run(c.env.DB, "UPDATE profiles SET last_club_id = ?, updated_at = ? WHERE user_id = ?", clubId, nowIso(), user.id);
+  return c.json({ ok: true, lastClubId: clubId });
+});
 
 accountRoutes.put("/profile", async (c) => {
   const user = c.get("user");
@@ -167,7 +182,7 @@ accountRoutes.post("/password", async (c) => {
   if (input.revokeOtherSessions) {
     // Close realtime sockets that belonged to the now-revoked sessions; this
     // browser reconnects with its new session cookie.
-    c.executionCtx.waitUntil(Promise.all(previousSessions.map((s) => disconnectSession(c.env, s.id))));
+    c.executionCtx.waitUntil(Promise.all(previousSessions.map((s) => disconnectSession(c.env, user.id, s.id))));
   }
   // Forward the replacement session cookie so this device stays signed in.
   for (const cookie of authHeaders.getSetCookie()) c.header("Set-Cookie", cookie, { append: true });
@@ -261,7 +276,7 @@ accountRoutes.delete("/sessions/:id", async (c) => {
   // Scoped by user id: a member can only revoke their own sessions.
   const res = await run(c.env.DB, 'DELETE FROM "session" WHERE id = ? AND "userId" = ?', id, user.id);
   if (res.meta.changes === 0) throw notFound("Session not found");
-  c.executionCtx.waitUntil(disconnectSession(c.env, id));
+  c.executionCtx.waitUntil(disconnectSession(c.env, user.id, id));
   return c.json({ ok: true });
 });
 
@@ -270,7 +285,7 @@ accountRoutes.post("/sessions/revoke-others", async (c) => {
   const current = c.get("session");
   const others = await all<{ id: string }>(c.env.DB, 'SELECT id FROM "session" WHERE "userId" = ? AND id <> ?', user.id, current.id);
   await run(c.env.DB, 'DELETE FROM "session" WHERE "userId" = ? AND id <> ?', user.id, current.id);
-  c.executionCtx.waitUntil(Promise.all(others.map((s) => disconnectSession(c.env, s.id))));
+  c.executionCtx.waitUntil(Promise.all(others.map((s) => disconnectSession(c.env, user.id, s.id))));
   return c.json({ ok: true, revoked: others.length });
 });
 
@@ -288,7 +303,7 @@ accountRoutes.get("/export", async (c) => {
     all(db, "SELECT r.*, e.title FROM recommendations r JOIN book_editions e ON e.id = r.edition_id WHERE r.user_id = ?", user.id),
     all(db, "SELECT id, conversation_id, body, created_at, edited_at, deleted_at FROM messages WHERE sender_id = ?", user.id),
   ]);
-  c.header("Content-Disposition", `attachment; filename="teel-ridge-export-${user.username ?? user.id}.json"`);
+  c.header("Content-Disposition", `attachment; filename="chapterr-export-${user.username ?? user.id}.json"`);
   return c.json({ exportedAt: nowIso(), account: me, library, reviews, quotes, goals, recommendations, messages });
 });
 
@@ -296,6 +311,21 @@ accountRoutes.post("/delete", async (c) => {
   const user = c.get("user");
   const { password } = await parseBody(c, z.object({ password: z.string().min(1).max(128), confirm: z.literal("DELETE") }));
   await confirmPassword(c, user.id, password);
+  // A club must not lose its owner: clubs owned alone are archived with the account;
+  // clubs with other members need a new owner first.
+  const owned = await all<{ id: string; members: number }>(
+    c.env.DB,
+    `SELECT c.id, (SELECT COUNT(*) FROM club_members x WHERE x.club_id = c.id) AS members
+       FROM clubs c JOIN club_members m ON m.club_id = c.id AND m.user_id = ? AND m.role = 'owner' WHERE c.archived_at IS NULL`,
+    user.id,
+  );
+  if (owned.some((club) => Number(club.members) > 1)) {
+    throw new ApiError(409, "owns_clubs", "You own a club that still has other members. Transfer ownership or delete the club first.");
+  }
+  const now = nowIso();
+  if (owned.length) {
+    await c.env.DB.batch(owned.map((club) => c.env.DB.prepare("UPDATE clubs SET archived_at = ?, updated_at = ? WHERE id = ?").bind(now, now, club.id)));
+  }
   await disconnectUser(c.env, user.id).catch(() => undefined);
   // Personal data cascades via foreign keys; shared club records keep their content with the author cleared.
   await getAuth(c.env).api.deleteUser({ body: { password }, headers: c.req.raw.headers });

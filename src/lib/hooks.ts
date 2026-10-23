@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { APP_NAME } from "@shared/constants";
 
 export function useOnline(): boolean {
   const [online, setOnline] = useState(typeof navigator === "undefined" ? true : navigator.onLine);
@@ -26,6 +27,6 @@ export function useDebounced<T>(value: T, ms = 350): T {
 
 export function useDocumentTitle(title: string) {
   useEffect(() => {
-    document.title = title ? `${title} · Teel Ridge Book Club` : "Teel Ridge Book Club";
+    document.title = title ? `${title} · ${APP_NAME}` : APP_NAME;
   }, [title]);
 }

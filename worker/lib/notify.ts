@@ -40,7 +40,8 @@ export interface NotifyInput {
  */
 export async function notifyUsers(env: Env, recipientIds: string[] | "club", input: NotifyInput): Promise<void> {
   const col = PREF_COLUMN[input.kind];
-  const prefFilter = col ? `AND np.${col} = 1` : "";
+  // Members without a preferences row get the defaults (everything on).
+  const prefFilter = col ? `AND COALESCE(np.${col}, 1) = 1` : "";
   let recipients: string[];
   if (recipientIds === "club") {
     if (!input.clubId) return;
@@ -49,7 +50,7 @@ export async function notifyUsers(env: Env, recipientIds: string[] | "club", inp
       `SELECT m.user_id FROM club_members m
          JOIN "user" u ON u.id = m.user_id
          LEFT JOIN notification_preferences np ON np.user_id = m.user_id
-        WHERE m.club_id = ? AND u."emailVerified" = 1 AND m.user_id <> ? AND m.muted = 0 ${prefFilter.replace("AND np.", "AND COALESCE(np.")}${col ? ", 1) = 1" : ""}`,
+        WHERE m.club_id = ? AND u."emailVerified" = 1 AND m.user_id <> ? AND m.muted = 0 ${prefFilter}`,
       input.clubId,
       input.actorId,
     );
@@ -60,7 +61,7 @@ export async function notifyUsers(env: Env, recipientIds: string[] | "club", inp
     const rows = await all<{ id: string }>(
       env.DB,
       `SELECT u.id FROM "user" u LEFT JOIN notification_preferences np ON np.user_id = u.id
-        WHERE u.id IN (${placeholders(ids.length)}) ${col ? `AND COALESCE(np.${col}, 1) = 1` : ""}`,
+        WHERE u.id IN (${placeholders(ids.length)}) ${prefFilter}`,
       ...ids,
     );
     recipients = rows.map((r) => r.id);

@@ -1,14 +1,16 @@
 import { REVIEW_REACTIONS, type ReviewReaction, type Sentiment, type Visibility } from "../../shared/constants";
 import type { Quote, ReactionCount, Review, UserBook } from "../../shared/types";
+import { visibleToViewerSql } from "./club";
 import { all, bool, placeholders } from "./db";
 import { editionCols, mapEdition, mapMember, memberCols, type Row } from "./mappers";
 
 /**
  * Visibility rule for personal content: the owner sees everything; other
- * members see only "club" items. Every loader below takes the viewer id and
- * applies this rule in SQL.
+ * members see "club" items only when they share at least one club with the
+ * owner (visibleToViewerSql, which binds the viewer id twice). Every loader
+ * below takes the viewer id and applies this rule in SQL.
  */
-export const visibleTo = (alias: string) => `(${alias}.visibility = 'club' OR ${alias}.user_id = ?)`;
+const visibleTo = visibleToViewerSql;
 
 // --- Reviews -------------------------------------------------------------------------
 
@@ -49,6 +51,7 @@ export async function loadReviews(
     db,
     `${REVIEW_SELECT} WHERE ${visibleTo("r")} AND (${where}) ORDER BY ${opts.order ?? "r.updated_at DESC"} LIMIT ${opts.limit ?? 100}`,
     viewerId,
+    viewerId,
     ...params,
   );
   const reactions = await reactionsFor(
@@ -87,6 +90,7 @@ export async function loadQuotes(
      FROM quotes q JOIN "user" u ON u.id = q.user_id JOIN book_editions e ON e.id = q.edition_id
      WHERE ${visibleTo("q")} AND (${where}) ORDER BY q.created_at DESC LIMIT ${limit}`,
     viewerId,
+    viewerId,
     ...params,
   );
   return rows.map((r) => {
@@ -120,6 +124,7 @@ export async function loadUserBooks(
     db,
     `SELECT ub.*, ${editionCols("e", "e_")} FROM user_books ub JOIN book_editions e ON e.id = ub.edition_id
      WHERE ${visibleTo("ub")} AND (${where}) ORDER BY ${opts.order ?? "ub.updated_at DESC"} LIMIT ${opts.limit ?? 500}`,
+    viewerId,
     viewerId,
     ...params,
   );

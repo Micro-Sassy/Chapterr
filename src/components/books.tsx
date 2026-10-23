@@ -10,22 +10,23 @@ import { api, ApiRequestError, errorMessage } from "@/lib/api";
 import { authorsLine } from "@/lib/format";
 import { useDebounced } from "@/lib/hooks";
 import { BookCover } from "./BookCover";
-import { Alert, Button, Field, Input, Select, Spinner, Textarea } from "./ui";
+import { Alert, Button, cx, Field, Input, Select, Spinner, Textarea } from "./ui";
 import { Dialog } from "./ui/Dialog";
 import { useToast } from "./ui/Toast";
 
-export function BookRow({ edition, meta, action, link = true }: { edition: EditionSummary; meta?: ReactNode; action?: ReactNode; link?: boolean }) {
+/** A compact book row. Titles are set in Fraunces 500 to mark them as the books (§4.3). */
+export function BookRow({ edition, meta, action, link = true, size = "sm" }: { edition: EditionSummary; meta?: ReactNode; action?: ReactNode; link?: boolean; size?: "sm" | "md" }) {
   const title = (
     <>
-      <span className="font-medium">{edition.title}</span>
+      <span className={cx("book-title", size === "md" ? "text-lg" : "text-[17px]")}>{edition.title}</span>
       {edition.subtitle && <span className="text-ink-muted">: {edition.subtitle}</span>}
     </>
   );
   return (
     <div className="flex items-center gap-3">
-      <BookCover url={edition.coverUrl} title={edition.title} size="sm" />
+      <BookCover url={edition.coverUrl} title={edition.title} size={size === "md" ? "md" : "sm"} />
       <div className="min-w-0 flex-1">
-        <p className="line-clamp-2 text-sm">
+        <p className="line-clamp-2 leading-snug">
           {link ? (
             <Link to={`/books/${edition.id}`} className="hover:underline">
               {title}
@@ -34,7 +35,7 @@ export function BookRow({ edition, meta, action, link = true }: { edition: Editi
             title
           )}
         </p>
-        <p className="truncate text-xs text-ink-muted">
+        <p className="truncate text-sm text-ink-muted">
           {authorsLine(edition.authors)}
           {edition.publishedYear ? ` · ${edition.publishedYear}` : ""}
           {edition.format !== "unknown" ? ` · ${edition.format}` : ""}
@@ -108,7 +109,7 @@ export function EditionForm({
       <Field label="Subtitle" error={fieldErrors.subtitle}>
         {(id) => <Input id={id} {...form.register("subtitle")} />}
       </Field>
-      <Field label="Authors" hint="Separate multiple authors with commas." error={fieldErrors.authors}>
+      <Field label="Authors" hint="Separate several authors with commas." error={fieldErrors.authors}>
         {(id, d) => <Input id={id} aria-describedby={d} {...form.register("authors")} />}
       </Field>
       <div className="grid gap-3 sm:grid-cols-2">
@@ -153,10 +154,6 @@ export function EditionForm({
   );
 }
 
-/**
- * Search the club catalogue and the free book catalogues (Open Library /
- * Google Books), then return the chosen edition, creating it if needed.
- */
 function hintFrom(hit: CatalogResult) {
   return {
     title: hit.title,
@@ -172,10 +169,9 @@ function hintFrom(hit: CatalogResult) {
   };
 }
 
-/** Save a catalogue search result as a club edition (instant; details fill in on the server afterwards). */
+/** Save a catalogue search result as an edition (instant; details fill in on the server afterwards). */
 function saveHit(hit: CatalogResult) {
   return api<EditionDetail>("/api/books/editions/provider", {
-    // The hint lets the server save the book instantly; it fills in the rest in the background.
     body: { provider: hit.provider, providerId: hit.providerId, hint: hintFrom(hit) },
   });
 }
@@ -183,6 +179,10 @@ function saveHit(hit: CatalogResult) {
 type Pickable = { kind: "local"; edition: EditionSummary } | { kind: "catalog"; hit: CatalogResult };
 const pickKey = (p: Pickable) => (p.kind === "local" ? `e:${p.edition.id}` : `${p.hit.provider}:${p.hit.providerId}`);
 
+/**
+ * Search the shared catalogue and the free book catalogues (Open Library /
+ * Google Books), then return the chosen edition, creating it if needed.
+ */
 export function BookPicker({
   onPick,
   pickLabel = "Choose",
@@ -212,7 +212,6 @@ export function BookPicker({
     },
     onError: (err) => toast(errorMessage(err), "error"),
   });
-  // Books shelved from this search, keyed by result.
   const [shelved, setShelved] = useState<Record<string, true>>({});
   const shelve = useMutation({
     mutationFn: async (p: Pickable) => {
@@ -222,8 +221,8 @@ export function BookPicker({
     onSuccess: (res, p) => {
       setShelved((s) => ({ ...s, [pickKey(p)]: true }));
       void qc.invalidateQueries({ queryKey: ["library"] });
-      void qc.invalidateQueries({ queryKey: ["dashboard"] });
-      toast(res.added ? `Added “${res.book.edition.title}” to your To Be Read shelf` : `“${res.book.edition.title}” is already in your library`);
+      void qc.invalidateQueries({ queryKey: ["home"] });
+      toast(res.added ? "Shelved." : `“${res.book.edition.title}” is already in your library.`);
     },
     onError: (err) => toast(errorMessage(err), "error"),
   });
@@ -242,7 +241,7 @@ export function BookPicker({
           loading={shelve.isPending && shelve.variables && pickKey(shelve.variables) === key}
           onClick={() => shelve.mutate(p)}
         >
-          {done ? "In library" : "Add to library"}
+          {done ? "Shelved" : "Add to library"}
         </Button>
         {pick}
       </div>
@@ -254,16 +253,16 @@ export function BookPicker({
   const catalog = (search.data?.catalog ?? []).filter((c) => !c.existingEditionId || !localIds.has(c.existingEditionId));
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <div className="relative">
-        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-muted" aria-hidden />
+        <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-ink-muted" aria-hidden />
         <Input
           type="search"
           aria-label="Search by title, author or ISBN"
           placeholder="Title, author or ISBN"
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          className="pl-9"
+          className="pl-10"
           autoFocus
         />
       </div>
@@ -271,8 +270,8 @@ export function BookPicker({
       {search.data?.providerError && <Alert tone="warning">{search.data.providerError}</Alert>}
       {local.length > 0 && (
         <div>
-          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-muted">Already in the club catalogue</h3>
-          <ul className="space-y-2">
+          <h3 className="label mb-2 text-ink-muted">On the shelf already</h3>
+          <ul className="space-y-3">
             {local.map((e) => (
               <li key={e.id}>
                 <BookRow
@@ -292,10 +291,8 @@ export function BookPicker({
       )}
       {catalog.length > 0 && (
         <div>
-          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-muted">
-            From {search.data?.provider === "google_books" ? "Google Books" : "Open Library"}
-          </h3>
-          <ul className="space-y-2">
+          <h3 className="label mb-2 text-ink-muted">From {search.data?.provider === "google_books" ? "Google Books" : "Open Library"}</h3>
+          <ul className="space-y-3">
             {catalog.map((hit) => (
               <li key={`${hit.provider}-${hit.providerId}`}>
                 <BookRow
@@ -315,13 +312,7 @@ export function BookPicker({
                   meta={hit.isbn13 ? `ISBN ${hit.isbn13}${hit.publisher ? ` · ${hit.publisher}` : ""}` : hit.publisher}
                   action={actions(
                     { kind: "catalog", hit },
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      icon={Plus}
-                      loading={add.isPending && add.variables?.providerId === hit.providerId}
-                      onClick={() => add.mutate(hit)}
-                    >
+                    <Button size="sm" variant="secondary" icon={Plus} loading={add.isPending && add.variables?.providerId === hit.providerId} onClick={() => add.mutate(hit)}>
                       {pickLabel}
                     </Button>,
                   )}
@@ -332,11 +323,11 @@ export function BookPicker({
         </div>
       )}
       {debounced.length >= 2 && search.isSuccess && local.length === 0 && catalog.length === 0 && !search.data.providerError && (
-        <p className="text-sm text-ink-muted">No matches found.</p>
+        <p className="text-sm text-ink-muted">No matches. Try the author's name, or add the book by hand below.</p>
       )}
       <div className="border-t border-line pt-3">
         <Button variant="ghost" size="sm" icon={Plus} onClick={() => setManual(true)}>
-          Can't find it? Add a book manually
+          Add a book manually
         </Button>
       </div>
       <Dialog open={manual} onClose={() => setManual(false)} title="Add a book manually" wide>
@@ -352,7 +343,7 @@ export function BookPicker({
               if (err instanceof ApiRequestError && err.code === "duplicate_isbn" && err.current && typeof err.current === "object") {
                 const existing = await api<{ edition: EditionDetail }>(`/api/books/editions/${(err.current as { id: string }).id}`);
                 setManual(false);
-                toast("That ISBN is already in the catalogue — using the existing edition.");
+                toast("That ISBN is already on the shelf. Using the existing edition.");
                 onPick(existing.edition);
                 return;
               }

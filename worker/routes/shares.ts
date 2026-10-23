@@ -13,7 +13,7 @@ import { clientIp, requireTurnstile } from "../security/turnstile";
 
 /**
  * Public share links. A member explicitly creates a link for one review,
- * one quote, one of their reading lists, or the club's annual list. The link
+ * one quote, one of their reading lists, or a club's annual list. The link
  * carries a 256-bit random token; only its SHA-256 hash is stored. Links can
  * expire and be revoked. Chats and messages are not a shareable type.
  *
@@ -29,6 +29,7 @@ function mapShare(r: Row, label: string): ShareLink {
     id: String(r.id),
     resourceType: r.resource_type as ShareResourceType,
     resourceId: (r.resource_id as string | null) ?? null,
+    clubId: (r.club_id as string | null) ?? null,
     year: r.year === null || r.year === undefined ? null : Number(r.year),
     status: (r.status as ReadingStatus | null) ?? null,
     label,
@@ -54,8 +55,10 @@ async function describe(db: D1Database, r: Row): Promise<string> {
     }
     case "reading_list":
       return `My ${r.status ? READING_STATUS_LABELS[r.status as ReadingStatus].toLowerCase() : "reading"} list${r.year ? ` (${r.year})` : ""}`;
-    case "club_list":
-      return `Club reading list ${r.year}`;
+    case "club_list": {
+      const club = await first<{ name: string }>(db, "SELECT name FROM clubs WHERE id = ?", String(r.club_id));
+      return `${club?.name ?? "Club"} reading list ${r.year}`;
+    }
     default:
       return "Shared item";
   }
@@ -76,6 +79,7 @@ shareRoutes.post("/", async (c) => {
   const input = await parseBody(c, shareCreateSchema);
 
   let resourceId: string | null = null;
+  let clubId: string | null = null;
   let year: number | null = null;
   let status: ReadingStatus | null = null;
   if (input.resourceType === "review" || input.resourceType === "quote") {
@@ -91,8 +95,17 @@ shareRoutes.post("/", async (c) => {
     status = input.status ?? "finished";
     year = input.year;
   } else {
-    // Club annual list (shared club data, any member may share it).
-    if (!input.year) throw badRequest("Choose a year");
+    // A club's annual list: shared club data, so any current member of that club may share it.
+    if (!input.clubId) throw badRequest("Choose a club", { clubId: ["Required"] });
+    if (!input.year) throw badRequest("Choose a year", { year: ["Required"] });
+    const member = await first<{ n: number }>(
+      c.env.DB,
+      "SELECT 1 AS n FROM club_members m JOIN clubs cl ON cl.id = m.club_id AND cl.archived_at IS NULL WHERE m.club_id = ? AND m.user_id = ?",
+      input.clubId,
+      user.id,
+    );
+    if (!member) throw notFound("Club not found");
+    clubId = input.clubId;
     year = input.year;
   }
 
@@ -102,13 +115,14 @@ shareRoutes.post("/", async (c) => {
   const expiresAt = input.expiresInDays ? new Date(Date.now() + input.expiresInDays * 86400_000).toISOString() : null;
   await run(
     c.env.DB,
-    `INSERT INTO share_links (id, token_hash, created_by, resource_type, resource_id, year, status, expires_at, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO share_links (id, token_hash, created_by, resource_type, resource_id, club_id, year, status, expires_at, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     id,
     await sha256Hex(token),
     user.id,
     input.resourceType,
     resourceId,
+    clubId,
     year,
     status,
     expiresAt,
@@ -224,16 +238,27 @@ export async function resolvePublicShare(env: Env, token: string): Promise<Publi
     }
     case "club_list": {
       const year = Number(link.year);
-      const goal = await first<{ target: number }>(env.DB, "SELECT target FROM club_annual_goals WHERE year = ?", year);
+      const clubId = String(link.club_id);
+      // The link only works while the sharer is still a member of a live club.
+      const club = await first<{ name: string }>(
+        env.DB,
+        "SELECT cl.name FROM clubs cl JOIN club_members m ON m.club_id = cl.id AND m.user_id = ? WHERE cl.id = ? AND cl.archived_at IS NULL",
+        String(link.created_by),
+        clubId,
+      );
+      if (!club) break;
+      const goal = await first<{ target: number }>(env.DB, "SELECT target FROM club_annual_goals WHERE club_id = ? AND year = ?", clubId, year);
       const rows = await all<Row>(
         env.DB,
         `SELECT b.status, b.position, ${PUB_EDITION} FROM club_annual_books b JOIN book_editions e ON e.id = b.edition_id
-         WHERE b.year = ? AND b.archived_at IS NULL ORDER BY b.position`,
+         WHERE b.club_id = ? AND b.year = ? AND b.archived_at IS NULL ORDER BY b.position`,
+        clubId,
         year,
       );
       share = {
         type: "club_list",
-        title: `Teel Ridge Book Club — ${year} reading list`,
+        clubName: club.name,
+        title: `${club.name} — ${year} reading list`,
         year,
         goal: goal ? Number(goal.target) : null,
         items: rows.map((r) => ({ edition: publicEdition(r), status: r.status as never, position: Number(r.position) })),

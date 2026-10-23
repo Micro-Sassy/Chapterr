@@ -17,12 +17,12 @@ export function UpdatePrompt() {
 
   if (!needRefresh && !offlineReady) return null;
   return (
-    <div role="status" className="flex flex-wrap items-center justify-center gap-3 border-b border-line bg-accent-soft px-4 py-2 text-sm">
+    <div role="status" className="flex flex-wrap items-center justify-center gap-3 border-b border-line bg-surface px-4 py-2 text-sm">
       {needRefresh ? (
         <>
-          <span>A new version of the app is available.</span>
+          <span>A new version of Chapterr is ready.</span>
           <Button size="sm" icon={RefreshCw} onClick={() => void updateServiceWorker(true)}>
-            Update now
+            Update
           </Button>
           <Button size="sm" variant="ghost" onClick={() => setNeedRefresh(false)}>
             Later
@@ -30,7 +30,7 @@ export function UpdatePrompt() {
         </>
       ) : (
         <>
-          <span>The app is ready to open offline.</span>
+          <span>Chapterr is ready to open offline.</span>
           <Button size="sm" variant="ghost" onClick={() => setOfflineReady(false)}>
             OK
           </Button>
