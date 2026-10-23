@@ -1,19 +1,19 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery } from "@tanstack/react-query";
 import { ArrowLeft, DoorOpen, Lock, MessageCirclePlus, UsersRound } from "lucide-react";
-import { useMemo, useRef, useState, type ReactNode } from "react";
-import { Link, useNavigate, useParams } from "react-router";
-import type { ClubMember } from "@shared/types";
+import { useRef, useState, type ReactNode } from "react";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router";
+import type { ClubDashboard, ClubMember, DiscussionRoom } from "@shared/types";
 import { Avatar } from "@/components/Avatar";
 import { ChatConversation } from "@/components/chat/ChatConversation";
 import { gateLabel } from "@/components/chat/gate";
-import { isRoomConversation, type ChatConversation as ChatConversationRow } from "@/components/chat/types";
+import { isRoomConversation, roomsKey, type ChatConversation as ChatConversationRow } from "@/components/chat/types";
 import { clubApi } from "@/components/records";
 import { Alert, Button, cx, EmptyState, Input, Spinner } from "@/components/ui";
 import { Dialog } from "@/components/ui/Dialog";
 import { api, errorMessage } from "@/lib/api";
 import { useSession } from "@/lib/auth";
 import { clubPath, useClub } from "@/lib/club";
-import { relativeTime } from "@/lib/format";
+import { relativeTime, todayIso } from "@/lib/format";
 import { useDocumentTitle } from "@/lib/hooks";
 import { useRealtimeStatus } from "@/lib/realtime";
 
@@ -64,14 +64,12 @@ function UnreadBadge({ count }: { count: number }) {
 
 function ConversationRow({ clubId, c, active }: { clubId: string; c: ChatConversationRow; active: boolean }) {
   const room = isRoomConversation(c);
-  const locked = room && c.room ? !c.room.unlocked : false;
   return (
     <li>
       <Link
         to={clubPath(clubId, `messages/${c.id}`)}
         aria-current={active ? "page" : undefined}
-        aria-label={locked ? `${c.title}, locked` : undefined}
-        className={cx("flex items-center gap-3 rounded-control px-3 py-2.5", active ? "bg-surface-2" : "hover:bg-surface-2", locked && "opacity-70")}
+        className={cx("flex items-center gap-3 rounded-control px-3 py-2.5", active ? "bg-surface-2" : "hover:bg-surface-2")}
       >
         {c.kind === "club" ? (
           <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-on-primary">
@@ -79,7 +77,7 @@ function ConversationRow({ clubId, c, active }: { clubId: string; c: ChatConvers
           </span>
         ) : room ? (
           <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-full border border-line bg-surface text-ink-muted">
-            {locked ? <Lock className="size-4" aria-hidden strokeWidth={1.75} /> : <DoorOpen className="size-5" aria-hidden strokeWidth={1.75} />}
+            <DoorOpen className="size-5" aria-hidden strokeWidth={1.75} />
           </span>
         ) : (
           <Avatar member={c.otherMember} size="md" />
@@ -90,11 +88,35 @@ function ConversationRow({ clubId, c, active }: { clubId: string; c: ChatConvers
             {c.lastMessageAt && <span className="shrink-0 text-xs text-ink-muted">{relativeTime(c.lastMessageAt)}</span>}
           </span>
           <span className="flex items-center justify-between gap-2">
-            <span className="truncate text-xs text-ink-muted">
-              {locked && c.room ? gateLabel(c.room) : (c.lastMessagePreview ?? (c.lastMessageAt ? "Message removed" : "No messages yet"))}
-            </span>
-            {!locked && <UnreadBadge count={c.unreadCount} />}
+            <span className="truncate text-xs text-ink-muted">{c.lastMessagePreview ?? (c.lastMessageAt ? "Message removed" : "No messages yet")}</span>
+            <UnreadBadge count={c.unreadCount} />
           </span>
+        </span>
+      </Link>
+    </li>
+  );
+}
+
+/** A discussion room in the sidebar: locked rooms show their gate and lead to the rooms page, open ones straight into the room. */
+function RoomRow({ clubId, room, active }: { clubId: string; room: DiscussionRoom; active: boolean }) {
+  const locked = !room.unlocked;
+  return (
+    <li>
+      <Link
+        to={clubPath(clubId, `rooms/${room.edition.id}${locked ? "" : `?room=${room.id}`}`)}
+        aria-current={active ? "page" : undefined}
+        aria-label={locked ? `${room.title}, locked. ${gateLabel(room)}` : undefined}
+        className={cx("flex items-center gap-3 rounded-control px-3 py-2", active ? "bg-surface-2" : "hover:bg-surface-2", locked && "opacity-70")}
+      >
+        <span className={cx("inline-flex size-8 shrink-0 items-center justify-center rounded-full border", locked ? "border-line bg-surface text-ink-muted" : "border-primary bg-primary text-on-primary")}>
+          {locked ? <Lock className="size-3.5" aria-hidden strokeWidth={1.75} /> : <DoorOpen className="size-4" aria-hidden strokeWidth={1.75} />}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="flex items-center justify-between gap-2">
+            <span className="truncate text-sm font-medium">{room.title}</span>
+            {!locked && room.lastMessageAt && <span className="shrink-0 text-xs text-ink-muted">{relativeTime(room.lastMessageAt)}</span>}
+          </span>
+          <span className="block truncate text-xs text-ink-muted">{locked ? gateLabel(room) : `${room.membersInside} inside · ${room.messageCount} ${room.messageCount === 1 ? "message" : "messages"}`}</span>
         </span>
       </Link>
     </li>
@@ -116,21 +138,23 @@ function Group({ title, action, children }: { title: string; action?: ReactNode;
 function ConversationList({ clubId, activeId }: { clubId: string; activeId?: string }) {
   const [creating, setCreating] = useState(false);
   const q = useQuery({ queryKey: ["conversations", clubId], queryFn: () => api<ChatConversationRow[]>(clubApi(clubId, "/conversations")) });
-
-  const groups = useMemo(() => {
-    const all = q.data ?? [];
-    const club = all.filter((c) => c.kind === "club");
-    const direct = all.filter((c) => c.kind === "direct");
-    const rooms = all.filter((c) => (c.kind !== "club" && c.kind !== "direct") || isRoomConversation(c));
-    const byBook = new Map<string, { title: string; editionId: string | null; items: ChatConversationRow[] }>();
-    for (const c of rooms) {
-      const key = c.room?.edition.id ?? "other";
-      const g = byBook.get(key) ?? { title: c.room?.edition.title ?? "Discussion rooms", editionId: c.room?.edition.id ?? null, items: [] };
-      g.items.push(c);
-      byBook.set(key, g);
-    }
-    return { club, direct, books: [...byBook.values()] };
-  }, [q.data]);
+  // Rooms are listed per book, not in /conversations: show the rooms of the books the club is reading now.
+  const dashboard = useQuery({ queryKey: ["club-dashboard", clubId], queryFn: () => api<ClubDashboard>(`/api/clubs/${clubId}/dashboard?today=${todayIso()}`), staleTime: 60_000 });
+  const currentBooks = (dashboard.data?.currentBooks ?? []).slice(0, 3);
+  const roomQueries = useQueries({
+    queries: currentBooks.map((b) => ({
+      queryKey: roomsKey(clubId, b.edition.id),
+      queryFn: () => api<DiscussionRoom[]>(clubApi(clubId, `/books/${encodeURIComponent(b.edition.id)}/rooms`)),
+      staleTime: 30_000,
+    })),
+  });
+  const all = q.data ?? [];
+  const groups = {
+    club: all.filter((c) => c.kind === "club" && !isRoomConversation(c)),
+    direct: all.filter((c) => c.kind === "direct" && !isRoomConversation(c)),
+    stray: all.filter(isRoomConversation),
+    books: currentBooks.map((b, i) => ({ edition: b.edition, rooms: roomQueries[i]?.data ?? [] })).filter((b) => b.rooms.length > 0),
+  };
 
   return (
     <div>
@@ -153,21 +177,26 @@ function ConversationList({ clubId, activeId }: { clubId: string; activeId?: str
           )}
           {groups.books.map((b) => (
             <Group
-              key={b.editionId ?? "other"}
-              title={b.title}
+              key={b.edition.id}
+              title={b.edition.title}
               action={
-                b.editionId ? (
-                  <Link to={clubPath(clubId, `rooms/${b.editionId}`)} className="text-xs font-medium text-ink-muted hover:text-ink hover:underline">
-                    All rooms
-                  </Link>
-                ) : undefined
+                <Link to={clubPath(clubId, `rooms/${b.edition.id}`)} className="text-xs font-medium text-ink-muted hover:text-ink hover:underline">
+                  All rooms
+                </Link>
               }
             >
-              {b.items.map((c) => (
-                <ConversationRow key={c.id} clubId={clubId} c={c} active={c.id === activeId} />
+              {b.rooms.map((r) => (
+                <RoomRow key={r.id} clubId={clubId} room={r} active={r.conversationId === activeId} />
               ))}
             </Group>
           ))}
+          {groups.stray.length > 0 && (
+            <Group title="Rooms">
+              {groups.stray.map((c) => (
+                <ConversationRow key={c.id} clubId={clubId} c={c} active={c.id === activeId} />
+              ))}
+            </Group>
+          )}
           {groups.direct.length > 0 && (
             <Group title="Direct">
               {groups.direct.map((c) => (
@@ -186,6 +215,7 @@ function ConversationList({ clubId, activeId }: { clubId: string; activeId?: str
 
 function ConversationView({ clubId, id }: { clubId: string; id: string }) {
   const realtime = useRealtimeStatus();
+  const [params] = useSearchParams();
   const meta = useQuery({ queryKey: ["conversation", clubId, id], queryFn: () => api<ChatConversationRow>(clubApi(clubId, `/conversations/${id}`)) });
   const list = useQuery({ queryKey: ["conversations", clubId], queryFn: () => api<ChatConversationRow[]>(clubApi(clubId, "/conversations")) });
   // The unread count as it was when this conversation was opened (the server resets it as we read).
@@ -196,17 +226,17 @@ function ConversationView({ clubId, id }: { clubId: string; id: string }) {
   if (meta.isError) return <Alert tone="error">{errorMessage(meta.error)}</Alert>;
   const conv = meta.data;
   const room = conv ? isRoomConversation(conv) : false;
-  const subtitle = conv?.kind === "club" ? "Everyone in the club" : room ? (conv?.room ? `${conv.room.edition.title} · ${gateLabel(conv.room)}` : "Discussion room") : "Private conversation";
+  const subtitle = room ? "Discussion room" : conv?.kind === "club" ? "Everyone in the club" : "Private conversation";
 
   const header = (
     <div className="flex items-center gap-3 border-b border-line pb-3">
       <Link to={clubPath(clubId, "messages")} className="rounded-control p-1 md:hidden" aria-label="Back to conversations">
         <ArrowLeft className="size-5" aria-hidden />
       </Link>
-      {conv?.kind === "direct" ? (
-        <Avatar member={conv.otherMember} />
-      ) : room ? (
+      {room ? (
         <DoorOpen className="size-5 text-ink-muted" aria-hidden strokeWidth={1.75} />
+      ) : conv?.kind === "direct" ? (
+        <Avatar member={conv.otherMember} />
       ) : (
         <UsersRound className="size-5 text-ink-muted" aria-hidden strokeWidth={1.75} />
       )}
@@ -216,11 +246,6 @@ function ConversationView({ clubId, id }: { clubId: string; id: string }) {
           {subtitle} · {realtime === "open" ? "Live" : "Reconnecting"}
         </p>
       </div>
-      {room && conv?.room && (
-        <Link to={clubPath(clubId, `rooms/${conv.room.edition.id}`)} className="hidden text-xs font-medium text-ink-muted hover:text-ink hover:underline sm:inline">
-          All rooms
-        </Link>
-      )}
     </div>
   );
 
@@ -231,8 +256,9 @@ function ConversationView({ clubId, id }: { clubId: string; id: string }) {
       conversationId={id}
       header={header}
       initialUnread={initialUnread.current ?? 0}
+      focusMessageId={params.get("message")}
       className="h-[calc(100dvh-10rem)] md:h-[calc(100dvh-8rem)]"
-      emptyBody={conv?.kind === "direct" ? "Say hello." : room ? "Nobody has spoken here yet. You are first." : "Say hello to the club."}
+      emptyBody={room ? "Nobody has spoken here yet. You are first." : conv?.kind === "direct" ? "Say hello." : "Say hello to the club."}
     />
   );
 }
